@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Trophy, Sparkles, CheckCircle2, XCircle, ArrowRight, RefreshCw, Lightbulb, Plus, X, Star, Volume2, VolumeX, Lock, Unlock, ArrowLeft, Save, BookOpen } from 'lucide-react';
 
 // COLOQUE AQUI A URL DO SEU WORKER CLOUDFLARE
-const API_URL = 'https://bataille-api.myqueiaswin.workers.dev'; 
+const API_URL = 'https://bataille-api.seu-usuario.workers.dev'; 
 
 const AVATARS = ['🦊', '🐱', '🐼', '🐸', '🐷', '🐙', '🦄', '🦖', '👻', '🤖', '👽', '🦉', '🦀', '🦁'];
 
@@ -94,6 +94,9 @@ export default function App() {
 
   const [questionBank, setQuestionBank] = useState(FALLBACK_BANK);
   const [isLoadingDB, setIsLoadingDB] = useState(true);
+  
+  // NOVO: Memória de perguntas para não repetir na mesma partida
+  const [usedQuestions, setUsedQuestions] = useState([]);
 
   const [teams, setTeams] = useState([]);
   const [turnsDone, setTurnsDone] = useState(0);
@@ -186,8 +189,21 @@ export default function App() {
 
   const pickRandomQuestion = (lvl) => {
     const pool = questionBank.filter((q) => q.level === lvl);
-    const sourcePool = pool.length > 0 ? pool : FALLBACK_BANK;
+    
+    // Filtra retirando as que já foram sorteadas na partida
+    let available = pool.filter((q) => !usedQuestions.includes(q.sentence));
+
+    // Se acabarem as perguntas inéditas, zera o histórico interno e reaproveita
+    if (available.length === 0 && pool.length > 0) {
+      available = pool;
+    }
+
+    const sourcePool = available.length > 0 ? available : FALLBACK_BANK;
     const chosen = sourcePool[Math.floor(Math.random() * sourcePool.length)];
+
+    // Registra a pergunta escolhida como usada
+    setUsedQuestions((prev) => [...prev, chosen.sentence]);
+
     return {
       ...chosen,
       options: LEVELS[lvl].multipleChoice && chosen.options ? shuffle(chosen.options) : []
@@ -220,6 +236,7 @@ export default function App() {
     setSetupError('');
     setTeams(validTeams.map((t) => ({ name: t.name.trim(), avatar: t.avatar, score: 0 })));
     setTurnsDone(0);
+    setUsedQuestions([]); // Zera histórico para nova partida
     setPhase('playing');
     setOpenAvatarPicker(null);
     loadQuestion(level);
@@ -234,6 +251,7 @@ export default function App() {
     setPhase('setup');
     setTeams([]);
     setTurnsDone(0);
+    setUsedQuestions([]); // Zera histórico ao voltar ao menu
     setQuestion(null);
     setFeedback(null);
     setAnswer('');
@@ -536,11 +554,10 @@ export default function App() {
   // === TELA DE SETUP ===
   if (phase === 'setup') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-300 via-purple-300 to-pink-300 font-sans p-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-300 via-purple-300 to-pink-300 font-sans p-4" onClick={() => setOpenAvatarPicker(null)}>
         <GlobalControls />
         <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
 
-        {/* MODAL DE SELEÇÃO DE AVATAR */}
         {openAvatarPicker !== null && (
           <div 
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-bounce-in"
@@ -572,7 +589,7 @@ export default function App() {
           </div>
         )}
 
-        <div className="glass-card p-8 md:p-10 rounded-[3rem] shadow-2xl max-w-md w-full animate-bounce-in relative overflow-hidden">
+        <div className="glass-card p-8 md:p-10 rounded-[3rem] shadow-2xl max-w-md w-full animate-bounce-in relative overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="absolute top-0 left-0 w-full h-4 bg-gradient-to-r from-pink-400 to-yellow-400" />
           <h1 className="text-4xl md:text-5xl font-extrabold text-center text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500 mb-1">
             Bataille de Verbes
