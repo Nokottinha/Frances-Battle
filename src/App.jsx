@@ -7,14 +7,14 @@ const API_URL = 'https://bataille-api.myqueiaswin.workers.dev';
 const AVATARS = ['🦊', '🐱', '🐼', '🐸', '🐷', '🐙', '🦄', '🦖', '👻', '🤖', '👽', '🦉', '🦀', '🦁'];
 
 const LEVELS = {
-  facile: { label: 'Fácil', points: 10 },
-  moyen: { label: 'Médio', points: 20 },
-  difficile: { label: 'Difícil', points: 30 }
+  facile: { label: 'Fácil', points: 10, multipleChoice: true },
+  moyen: { label: 'Médio', points: 20, multipleChoice: false },
+  difficile: { label: 'Difícil', points: 30, multipleChoice: false }
 };
 
 const INITIAL_QUESTION_STATE = {
   level: 'facile', sentence: '', infinitive: '', correctAnswer: '',
-  translation: '', tense: '', explanation: ''
+  options: '', translation: '', tense: '', explanation: ''
 };
 
 const FALLBACK_BANK = [
@@ -23,6 +23,7 @@ const FALLBACK_BANK = [
     sentence: 'Je ___ une pomme.',
     infinitive: 'manger',
     correctAnswer: 'mange',
+    options: ['mange', 'manges', 'mangeons', 'mangent'],
     translation: 'Eu como uma maçã.',
     tense: 'présent',
     explanation: 'Com "je", os verbos em -er recebem a terminação -e no presente.'
@@ -31,6 +32,15 @@ const FALLBACK_BANK = [
 
 const MAX_TEAMS = 10;
 const MIN_TEAMS = 1;
+
+const shuffle = (arr) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
 
 const stripAccents = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 const normalize = (s) => s.trim().toLowerCase().replace(/\s+/g, ' ').replace(/’/g, "'");
@@ -86,7 +96,7 @@ export default function App() {
   const [rounds, setRounds] = useState(3);
   const [level, setLevel] = useState('facile');
   const [selectedTense, setSelectedTense] = useState('Todos');
-  const [timeLimit, setTimeLimit] = useState(0); // 0 = sem tempo
+  const [timeLimit, setTimeLimit] = useState(0); 
   
   const [setupError, setSetupError] = useState('');
 
@@ -140,12 +150,8 @@ export default function App() {
       const res = await fetch(API_URL);
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
-        // Normaliza remoção de "options" caso o JSON venho do banco antigo
-        const cleanedData = data.map(q => {
-          const { options, ...rest } = q;
-          return rest;
-        });
-        setQuestionBank(cleanedData);
+        // AQUI ESTAVA O BUG. Removido o filtro que apagava as opções!
+        setQuestionBank(data);
       }
     } catch (e) {
       console.warn("Usando fallback de questões locais.");
@@ -231,7 +237,11 @@ export default function App() {
     const chosen = sourcePool[Math.floor(Math.random() * sourcePool.length)];
 
     setUsedQuestions((prev) => [...prev, chosen.sentence]);
-    return chosen;
+    
+    return {
+      ...chosen,
+      options: LEVELS[lvl].multipleChoice && chosen.options ? shuffle([...chosen.options]) : []
+    };
   };
 
   const loadQuestion = (lvl) => {
@@ -258,7 +268,6 @@ export default function App() {
       return;
     }
 
-    // Validação extra: Tem pergunta suficiente pro filtro escolhido?
     let poolCheck = questionBank.filter((q) => q.level === level);
     if (selectedTense !== 'Todos') {
       poolCheck = poolCheck.filter(q => q.tense === selectedTense);
@@ -379,7 +388,10 @@ export default function App() {
     const formattedQuestion = {
       ...newQ,
       sentence: safeSentence,
-      correctAnswer: newQ.correctAnswer.trim()
+      correctAnswer: newQ.correctAnswer.trim(),
+      options: newQ.level === 'facile' ? 
+        (Array.isArray(newQ.options) ? newQ.options : newQ.options.split(',').map(s => s.trim())) 
+        : []
     };
     
     let updatedBank;
@@ -417,7 +429,11 @@ export default function App() {
   };
 
   const editQuestion = (index) => {
-    setNewQ(questionBank[index]);
+    const q = questionBank[index];
+    setNewQ({
+      ...q,
+      options: Array.isArray(q.options) ? q.options.join(', ') : (q.options || '')
+    });
     setEditingIndex(index);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -543,7 +559,7 @@ export default function App() {
               
               <form onSubmit={handleSaveQuestion} className="space-y-6">
                 <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Estrutura Principal (Digitação)</h3>
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Estrutura Principal</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="col-span-1 md:col-span-2">
                       <label className="text-sm font-bold text-gray-700 mb-1 block">Frase em francês (Use ___ para a lacuna)</label>
@@ -578,6 +594,13 @@ export default function App() {
                       <label className="text-sm font-bold text-gray-700 mb-1 block">Tempo Verbal</label>
                       <input required type="text" value={newQ.tense} onChange={e => setNewQ({...newQ, tense: e.target.value})} className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 outline-none text-gray-800" placeholder="Ex: présent" />
                     </div>
+
+                    {newQ.level === 'facile' && (
+                      <div className="col-span-1 md:col-span-2">
+                        <label className="text-sm font-bold text-gray-700 mb-1 block">Opções para Múltipla Escolha (Separadas por vírgula)</label>
+                        <input required type="text" value={newQ.options} onChange={e => setNewQ({...newQ, options: e.target.value})} className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 outline-none text-gray-800" placeholder="Ex: mange, manges, mangeons, mangent" />
+                      </div>
+                    )}
 
                     <div className="col-span-1 md:col-span-2">
                       <label className="text-sm font-bold text-gray-700 mb-1 block">Tradução da frase completa para Português</label>
@@ -979,11 +1002,22 @@ export default function App() {
                 </div>
               )}
 
+              {/* AQUI A MÚLTIPLA ESCOLHA VOLTA A APARECER SE O NÍVEL PERMITIR */}
               {!feedback ? (
-                <form onSubmit={(e) => { e.preventDefault(); submitAnswer(answer); }} className="flex flex-col md:flex-row gap-4 justify-center mt-6">
-                  <input type="text" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Digite a forma conjugada..." className="flex-1 px-6 py-4 rounded-2xl border-2 border-indigo-200 focus:border-indigo-500 outline-none text-xl font-bold text-center md:text-left text-indigo-900" autoFocus />
-                  <button type="submit" disabled={!answer.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-8 rounded-2xl shadow-lg transform transition hover:scale-105 disabled:opacity-50 flex items-center justify-center gap-2">Enviar <ArrowRight className="w-5 h-5" /></button>
-                </form>
+                LEVELS[level].multipleChoice && question.options && question.options.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-4 mt-6">
+                    {question.options.map((opt, i) => (
+                      <button key={`${opt}-${i}`} onClick={() => submitAnswer(opt)} className="bg-white border-2 border-indigo-100 hover:border-indigo-400 hover:bg-indigo-50 text-indigo-800 font-bold text-xl py-4 rounded-2xl shadow-sm transform transition hover:-translate-y-1 active:scale-95">
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <form onSubmit={(e) => { e.preventDefault(); submitAnswer(answer); }} className="flex flex-col md:flex-row gap-4 justify-center mt-6">
+                    <input type="text" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Digite a forma conjugada..." className="flex-1 px-6 py-4 rounded-2xl border-2 border-indigo-200 focus:border-indigo-500 outline-none text-xl font-bold text-center md:text-left text-indigo-900" autoFocus />
+                    <button type="submit" disabled={!answer.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-8 rounded-2xl shadow-lg transform transition hover:scale-105 disabled:opacity-50 flex items-center justify-center gap-2">Enviar <ArrowRight className="w-5 h-5" /></button>
+                  </form>
+                )
               ) : (
                 <div className={`mt-6 p-6 rounded-3xl flex flex-col items-center justify-center border-2 ${feedback.result === 'correct' ? 'bg-green-50 border-green-200 animate-bounce-in' : feedback.result === 'close' ? 'bg-yellow-50 border-yellow-200 animate-bounce-in' : 'bg-red-50 border-red-200 animate-shake'}`}>
                   {feedback.result === 'correct' && (
