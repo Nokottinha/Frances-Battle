@@ -4,7 +4,12 @@
     "sentence": "Je ___ une pomme.",
     "infinitive": "manger",
     "correctAnswer": "mange",
-    "options": ["mange", "manges", "mangeons", "mangent"],
+    "options": [
+      "mange",
+      "manges",
+      "mangeons",
+      "mangent"
+    ],
     "translation": "Eu como uma maçã.",
     "tense": "présent",
     "explanation": "Com \"je\", os verbos em -er recebem a terminação -e no presente."
@@ -14,19 +19,54 @@
     "sentence": "Nous ___ en France.",
     "infinitive": "habiter",
     "correctAnswer": "habitons",
-    "options": ["habite", "habitons", "habitez", "habitent"],
+    "options": [
+      "habite",
+      "habitons",
+      "habitez",
+      "habitent"
+    ],
     "translation": "Nós moramos na França.",
     "tense": "présent",
     "explanation": "Com \"nous\", os verbos em -er terminam em -ons."
   },
   {
-    "level": "facile",
-    "sentence": "Tu ___ français ?",
-    "infinitive": "parler",
-    "correctAnswer": "parles",
-    "options": ["parle", "parles", "parlons", "parlent"],
-    "translation": "Você fala francês?",
-    "tense": "présent",
-    "explanation": "Com \"tu\", os verbos em -er terminam em -es."
+    "level": "moyen",
+    "sentence": "Hier, nous ___ au marché.",
+    "infinitive": "aller",
+    "correctAnswer": "sommes allés",
+    "options": [],
+    "translation": "Ontem, nós fomos ao mercado.",
+    "tense": "passé composé",
+    "explanation": "Aller usa o auxiliar \"être\", então o particípio concorda com o sujeito."
+  },
+  {
+    "level": "moyen",
+    "sentence": "Quand j'étais petit, j'___ souvent à la mer.",
+    "infinitive": "aller",
+    "correctAnswer": "allais",
+    "options": [],
+    "translation": "Quando eu era pequeno, eu ia com frequência à praia.",
+    "tense": "imparfait",
+    "explanation": "O imparfait descreve hábitos e ações repetidas no passado."
+  },
+  {
+    "level": "difficile",
+    "sentence": "Il faut que tu ___ tes devoirs avant ce soir.",
+    "infinitive": "faire",
+    "correctAnswer": "fasses",
+    "options": [],
+    "translation": "É preciso que você faça seus deveres antes desta noite.",
+    "tense": "subjonctif présent",
+    "explanation": "A expressão \"il faut que\" exige o subjuntivo."
+  },
+  {
+    "level": "difficile",
+    "sentence": "Si j'avais de l'argent, j'___ un nouveau vélo.",
+    "infinitive": "acheter",
+    "correctAnswer": "achèterais",
+    "options": [],
+    "translation": "Se eu tivesse dinheiro, compraria uma bicicleta nova.",
+    "tense": "conditionnel présent",
+    "explanation": "Em \"si + imparfait\", o verbo principal vai ao conditionnel présent."
   }
 ]
