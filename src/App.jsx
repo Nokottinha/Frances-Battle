@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Trophy, Sparkles, CheckCircle2, XCircle, ArrowRight, RefreshCw, Lightbulb, Plus, X, Star, Volume2, VolumeX, Lock, Unlock, ArrowLeft, Save, BookOpen } from 'lucide-react';
 
 // COLOQUE AQUI A URL DO SEU WORKER CLOUDFLARE
-const API_URL = 'https://bataille-api.seu-usuario.workers.dev'; 
+const API_URL = 'https://bataille-api.myqueiaswin.workers.dev'; 
 
 const AVATARS = ['🦊', '🐱', '🐼', '🐸', '🐷', '🐙', '🦄', '🦖', '👻', '🤖', '👽', '🦉', '🦀', '🦁'];
 
