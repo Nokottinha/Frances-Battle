@@ -1,0 +1,32 @@
+[
+  {
+    "level": "facile",
+    "sentence": "Je ___ une pomme.",
+    "infinitive": "manger",
+    "correctAnswer": "mange",
+    "options": ["mange", "manges", "mangeons", "mangent"],
+    "translation": "Eu como uma maçã.",
+    "tense": "présent",
+    "explanation": "Com \"je\", os verbos em -er recebem a terminação -e no presente."
+  },
+  {
+    "level": "facile",
+    "sentence": "Nous ___ en France.",
+    "infinitive": "habiter",
+    "correctAnswer": "habitons",
+    "options": ["habite", "habitons", "habitez", "habitent"],
+    "translation": "Nós moramos na França.",
+    "tense": "présent",
+    "explanation": "Com \"nous\", os verbos em -er terminam em -ons."
+  },
+  {
+    "level": "facile",
+    "sentence": "Tu ___ français ?",
+    "infinitive": "parler",
+    "correctAnswer": "parles",
+    "options": ["parle", "parles", "parlons", "parlent"],
+    "translation": "Você fala francês?",
+    "tense": "présent",
+    "explanation": "Com \"tu\", os verbos em -er terminam em -es."
+  }
+]
