@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Sparkles, CheckCircle2, XCircle, ArrowRight, RefreshCw, Lightbulb, Plus, X, Star, Volume2, VolumeX, Lock, Unlock, ArrowLeft, Save, BookOpen } from 'lucide-react';
+import { Trophy, Sparkles, CheckCircle2, XCircle, ArrowRight, RefreshCw, Lightbulb, Plus, X, Star, Volume2, VolumeX, Lock, Unlock, ArrowLeft, Save, BookOpen, Pencil, Trash2, Download, Clock } from 'lucide-react';
 
 // COLOQUE AQUI A URL DO SEU WORKER CLOUDFLARE
 const API_URL = 'https://bataille-api.myqueiaswin.workers.dev'; 
@@ -7,9 +7,14 @@ const API_URL = 'https://bataille-api.myqueiaswin.workers.dev';
 const AVATARS = ['🦊', '🐱', '🐼', '🐸', '🐷', '🐙', '🦄', '🦖', '👻', '🤖', '👽', '🦉', '🦀', '🦁'];
 
 const LEVELS = {
-  facile: { label: 'Fácil', points: 10, multipleChoice: true },
-  moyen: { label: 'Médio', points: 20, multipleChoice: false },
-  difficile: { label: 'Difícil', points: 30, multipleChoice: false }
+  facile: { label: 'Fácil', points: 10 },
+  moyen: { label: 'Médio', points: 20 },
+  difficile: { label: 'Difícil', points: 30 }
+};
+
+const INITIAL_QUESTION_STATE = {
+  level: 'facile', sentence: '', infinitive: '', correctAnswer: '',
+  translation: '', tense: '', explanation: ''
 };
 
 const FALLBACK_BANK = [
@@ -18,7 +23,6 @@ const FALLBACK_BANK = [
     sentence: 'Je ___ une pomme.',
     infinitive: 'manger',
     correctAnswer: 'mange',
-    options: ['mange', 'manges', 'mangeons', 'mangent'],
     translation: 'Eu como uma maçã.',
     tense: 'présent',
     explanation: 'Com "je", os verbos em -er recebem a terminação -e no presente.'
@@ -27,15 +31,6 @@ const FALLBACK_BANK = [
 
 const MAX_TEAMS = 10;
 const MIN_TEAMS = 1;
-
-const shuffle = (arr) => {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-};
 
 const stripAccents = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 const normalize = (s) => s.trim().toLowerCase().replace(/\s+/g, ' ').replace(/’/g, "'");
@@ -90,12 +85,14 @@ export default function App() {
   
   const [rounds, setRounds] = useState(3);
   const [level, setLevel] = useState('facile');
+  const [selectedTense, setSelectedTense] = useState('Todos');
+  const [timeLimit, setTimeLimit] = useState(0); // 0 = sem tempo
+  
   const [setupError, setSetupError] = useState('');
 
   const [questionBank, setQuestionBank] = useState(FALLBACK_BANK);
   const [isLoadingDB, setIsLoadingDB] = useState(true);
   
-  // NOVO: Memória de perguntas para não repetir na mesma partida
   const [usedQuestions, setUsedQuestions] = useState([]);
 
   const [teams, setTeams] = useState([]);
@@ -104,6 +101,7 @@ export default function App() {
   const [question, setQuestion] = useState(null);
   const [answer, setAnswer] = useState('');
   const [feedback, setFeedback] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(0);
   
   const [hintShown, setHintShown] = useState(false);
   const [hintIndex, setHintIndex] = useState(null); 
@@ -142,7 +140,12 @@ export default function App() {
       const res = await fetch(API_URL);
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
-        setQuestionBank(data);
+        // Normaliza remoção de "options" caso o JSON venho do banco antigo
+        const cleanedData = data.map(q => {
+          const { options, ...rest } = q;
+          return rest;
+        });
+        setQuestionBank(cleanedData);
       }
     } catch (e) {
       console.warn("Usando fallback de questões locais.");
@@ -154,13 +157,38 @@ export default function App() {
     fetchQuestions();
   }, []);
 
+  // Lógica do Temporizador
+  useEffect(() => {
+    if (phase === 'playing' && !feedback && timeLimit > 0 && question) {
+      const timer = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            handleTimeOut();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [phase, feedback, question, timeLimit]);
+
+  const handleTimeOut = () => {
+    tipAudio.pause();
+    tipAudio.currentTime = 0;
+    playSound('wrong_answer.mp3');
+    setFeedback({ result: 'timeout', earned: 0, givenAnswer: '' });
+  };
+
   const [isAdminAuth, setIsAdminAuth] = useState(false);
   const [adminPassInput, setAdminPassInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [newQ, setNewQ] = useState({
-    level: 'facile', sentence: '', infinitive: '', correctAnswer: '',
-    options: '', translation: '', tense: '', explanation: ''
-  });
+  
+  const [newQ, setNewQ] = useState(INITIAL_QUESTION_STATE);
+  const [editingIndex, setEditingIndex] = useState(null);
+
+  const availableTenses = ['Todos', ...new Set(questionBank.map(q => q.tense).filter(Boolean))];
 
   const updateTeamInput = (index, value) => {
     setTeamInputs((prev) => prev.map((t, i) => (i === index ? { ...t, name: value } : t)));
@@ -188,12 +216,13 @@ export default function App() {
   };
 
   const pickRandomQuestion = (lvl) => {
-    const pool = questionBank.filter((q) => q.level === lvl);
+    let pool = questionBank.filter((q) => q.level === lvl);
     
-    // Filtra retirando as que já foram sorteadas na partida
+    if (selectedTense !== 'Todos') {
+      pool = pool.filter(q => q.tense === selectedTense);
+    }
+    
     let available = pool.filter((q) => !usedQuestions.includes(q.sentence));
-
-    // Se acabarem as perguntas inéditas, zera o histórico interno e reaproveita
     if (available.length === 0 && pool.length > 0) {
       available = pool;
     }
@@ -201,13 +230,8 @@ export default function App() {
     const sourcePool = available.length > 0 ? available : FALLBACK_BANK;
     const chosen = sourcePool[Math.floor(Math.random() * sourcePool.length)];
 
-    // Registra a pergunta escolhida como usada
     setUsedQuestions((prev) => [...prev, chosen.sentence]);
-
-    return {
-      ...chosen,
-      options: LEVELS[lvl].multipleChoice && chosen.options ? shuffle(chosen.options) : []
-    };
+    return chosen;
   };
 
   const loadQuestion = (lvl) => {
@@ -215,6 +239,7 @@ export default function App() {
     setAnswer('');
     setHintShown(false);
     setHintIndex(null);
+    setTimeLeft(timeLimit);
     setQuestion(pickRandomQuestion(lvl));
   };
 
@@ -232,11 +257,22 @@ export default function App() {
       setSetupError('Os nomes dos jogadores precisam ser diferentes.');
       return;
     }
+
+    // Validação extra: Tem pergunta suficiente pro filtro escolhido?
+    let poolCheck = questionBank.filter((q) => q.level === level);
+    if (selectedTense !== 'Todos') {
+      poolCheck = poolCheck.filter(q => q.tense === selectedTense);
+    }
+    if (poolCheck.length === 0 && questionBank.length > 0) {
+      playSound('wrong_answer.mp3');
+      setSetupError(`Não há questões de nível ${LEVELS[level].label} no tempo ${selectedTense}.`);
+      return;
+    }
     
     setSetupError('');
     setTeams(validTeams.map((t) => ({ name: t.name.trim(), avatar: t.avatar, score: 0 })));
     setTurnsDone(0);
-    setUsedQuestions([]); // Zera histórico para nova partida
+    setUsedQuestions([]); 
     setPhase('playing');
     setOpenAvatarPicker(null);
     loadQuestion(level);
@@ -251,7 +287,7 @@ export default function App() {
     setPhase('setup');
     setTeams([]);
     setTurnsDone(0);
-    setUsedQuestions([]); // Zera histórico ao voltar ao menu
+    setUsedQuestions([]); 
     setQuestion(null);
     setFeedback(null);
     setAnswer('');
@@ -331,7 +367,7 @@ export default function App() {
     setIsLoadingDB(false);
   };
 
-  const handleAddQuestion = async (e) => {
+  const handleSaveQuestion = async (e) => {
     e.preventDefault();
     setIsSaving(true);
 
@@ -343,11 +379,16 @@ export default function App() {
     const formattedQuestion = {
       ...newQ,
       sentence: safeSentence,
-      correctAnswer: newQ.correctAnswer.trim(),
-      options: newQ.level === 'facile' ? newQ.options.split(',').map(s => s.trim()) : []
+      correctAnswer: newQ.correctAnswer.trim()
     };
     
-    const updatedBank = [...questionBank, formattedQuestion];
+    let updatedBank;
+    if (editingIndex !== null) {
+      updatedBank = [...questionBank];
+      updatedBank[editingIndex] = formattedQuestion;
+    } else {
+      updatedBank = [...questionBank, formattedQuestion];
+    }
 
     try {
       const res = await fetch(API_URL, {
@@ -358,8 +399,14 @@ export default function App() {
       
       if (res.ok) {
         setQuestionBank(updatedBank);
-        setNewQ({ level: 'facile', sentence: '', infinitive: '', correctAnswer: '', options: '', translation: '', tense: '', explanation: '' });
-        alert("Nova questão adicionada com sucesso ao banco de dados!");
+        setNewQ(INITIAL_QUESTION_STATE);
+        
+        if (editingIndex !== null) {
+          alert("Questão atualizada com sucesso!");
+          setEditingIndex(null);
+        } else {
+          alert("Nova questão adicionada com sucesso ao banco de dados!");
+        }
       } else {
         alert("Erro ao salvar. Verifique a autenticação.");
       }
@@ -367,6 +414,52 @@ export default function App() {
       alert("Erro de conexão com a Cloudflare.");
     }
     setIsSaving(false);
+  };
+
+  const editQuestion = (index) => {
+    setNewQ(questionBank[index]);
+    setEditingIndex(index);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const deleteQuestion = async (index) => {
+    if (!window.confirm("Tem certeza que deseja apagar esta questão?")) return;
+    
+    setIsSaving(true);
+    const updatedBank = questionBank.filter((_, i) => i !== index);
+    
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${adminPassInput}` },
+        body: JSON.stringify(updatedBank)
+      });
+      if (res.ok) {
+        setQuestionBank(updatedBank);
+        if (editingIndex === index) {
+          setEditingIndex(null);
+          setNewQ(INITIAL_QUESTION_STATE);
+        }
+      } else {
+        alert("Erro de autenticação ao deletar.");
+      }
+    } catch(e) {
+       alert("Erro ao conectar com a Cloudflare.");
+    }
+    setIsSaving(false);
+  };
+
+  const exportBackup = () => {
+    const dataStr = JSON.stringify(questionBank, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `bataille_backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const totalTurns = rounds * teams.length;
@@ -431,19 +524,26 @@ export default function App() {
             </form>
           ) : (
             <div className="animate-bounce-in">
-              <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-100">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 pb-4 border-b border-gray-100 gap-4">
                 <div className="flex items-center gap-3">
                   <BookOpen className="w-8 h-8 text-indigo-600" />
-                  <h2 className="text-2xl font-extrabold text-gray-800">Nova Questão</h2>
+                  <h2 className="text-2xl font-extrabold text-gray-800">
+                    {editingIndex !== null ? 'Editar Questão' : 'Nova Questão'}
+                  </h2>
                 </div>
-                <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-1.5 rounded-full text-sm font-bold shadow-sm">
-                  {questionBank.length} cadastradas no servidor
-                </span>
+                <div className="flex gap-3">
+                  <button onClick={exportBackup} type="button" className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-4 py-1.5 rounded-full text-sm font-bold shadow-sm flex items-center gap-2 transition">
+                    <Download className="w-4 h-4"/> Backup (JSON)
+                  </button>
+                  <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-1.5 rounded-full text-sm font-bold shadow-sm">
+                    {questionBank.length} cadastradas
+                  </span>
+                </div>
               </div>
               
-              <form onSubmit={handleAddQuestion} className="space-y-6">
+              <form onSubmit={handleSaveQuestion} className="space-y-6">
                 <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Estrutura Principal</h3>
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Estrutura Principal (Digitação)</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="col-span-1 md:col-span-2">
                       <label className="text-sm font-bold text-gray-700 mb-1 block">Frase em francês (Use ___ para a lacuna)</label>
@@ -468,9 +568,9 @@ export default function App() {
                     <div>
                       <label className="text-sm font-bold text-gray-700 mb-1 block">Dificuldade</label>
                       <select value={newQ.level} onChange={e => setNewQ({...newQ, level: e.target.value})} className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 outline-none bg-white text-gray-800 font-medium">
-                        <option value="facile">Fácil (Exibe 4 opções)</option>
-                        <option value="moyen">Médio (Aluno deve digitar)</option>
-                        <option value="difficile">Difícil (Aluno deve digitar)</option>
+                        <option value="facile">Fácil</option>
+                        <option value="moyen">Médio</option>
+                        <option value="difficile">Difícil</option>
                       </select>
                     </div>
 
@@ -478,13 +578,6 @@ export default function App() {
                       <label className="text-sm font-bold text-gray-700 mb-1 block">Tempo Verbal</label>
                       <input required type="text" value={newQ.tense} onChange={e => setNewQ({...newQ, tense: e.target.value})} className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 outline-none text-gray-800" placeholder="Ex: présent" />
                     </div>
-
-                    {newQ.level === 'facile' && (
-                      <div className="col-span-1 md:col-span-2">
-                        <label className="text-sm font-bold text-gray-700 mb-1 block">Opções para Múltipla Escolha (Separadas por vírgula)</label>
-                        <input required type="text" value={newQ.options} onChange={e => setNewQ({...newQ, options: e.target.value})} className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 outline-none text-gray-800" placeholder="Ex: mange, manges, mangeons, mangent" />
-                      </div>
-                    )}
 
                     <div className="col-span-1 md:col-span-2">
                       <label className="text-sm font-bold text-gray-700 mb-1 block">Tradução da frase completa para Português</label>
@@ -498,9 +591,18 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="pt-4 flex justify-end">
+                <div className="pt-4 flex justify-end gap-4">
+                  {editingIndex !== null && (
+                    <button 
+                      type="button" 
+                      onClick={() => { setEditingIndex(null); setNewQ(INITIAL_QUESTION_STATE); }} 
+                      className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 px-8 rounded-2xl transition"
+                    >
+                      Cancelar
+                    </button>
+                  )}
                   <button disabled={isSaving} type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition flex items-center gap-3 disabled:opacity-50">
-                    {isSaving ? 'Salvando na Cloudflare...' : <><Save className="w-5 h-5" /> Salvar Questão e Publicar</>}
+                    {isSaving ? 'Salvando na Cloudflare...' : <><Save className="w-5 h-5" /> {editingIndex !== null ? 'Atualizar Questão' : 'Salvar Questão e Publicar'}</>}
                   </button>
                 </div>
               </form>
@@ -515,9 +617,9 @@ export default function App() {
                     <p className="text-center text-gray-500 py-4 italic">Nenhuma questão cadastrada ainda.</p>
                   ) : (
                     questionBank.map((q, idx) => (
-                      <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col gap-2">
+                      <div key={idx} className={`bg-white p-5 rounded-2xl border-2 shadow-sm flex flex-col gap-2 transition-all ${editingIndex === idx ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200'}`}>
                         <div className="flex justify-between items-start gap-4">
-                          <p className="font-bold text-gray-800 text-lg">
+                          <p className="font-bold text-gray-800 text-lg flex-1">
                             {q.sentence.split(/_{1,}/).map((part, i, arr) => (
                               <React.Fragment key={i}>
                                 {part}
@@ -525,13 +627,23 @@ export default function App() {
                               </React.Fragment>
                             ))}
                           </p>
-                          <span className={`text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${
-                            q.level === 'facile' ? 'bg-green-100 text-green-700 border border-green-200' :
-                            q.level === 'moyen' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
-                            'bg-red-100 text-red-700 border border-red-200'
-                          }`}>
-                            {LEVELS[q.level]?.label || q.level}
-                          </span>
+                          <div className="flex flex-col md:flex-row items-end md:items-center gap-3">
+                            <span className={`text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${
+                              q.level === 'facile' ? 'bg-green-100 text-green-700 border border-green-200' :
+                              q.level === 'moyen' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                              'bg-red-100 text-red-700 border border-red-200'
+                            }`}>
+                              {LEVELS[q.level]?.label || q.level}
+                            </span>
+                            <div className="flex gap-2">
+                              <button type="button" onClick={() => editQuestion(idx)} className="p-2 text-indigo-600 bg-indigo-100 hover:bg-indigo-200 rounded-lg transition" title="Editar">
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button type="button" onClick={() => deleteQuestion(idx)} disabled={isSaving} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition disabled:opacity-50" title="Excluir">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
                         <p className="text-sm text-gray-500 italic">"{q.translation}"</p>
                         <div className="flex gap-4 mt-2 text-xs font-semibold text-gray-400">
@@ -664,22 +776,55 @@ export default function App() {
               </div>
             </div>
 
-            <div className="bg-green-50/80 p-4 rounded-3xl border-2 border-green-200 shadow-sm">
-              <p className="text-sm font-bold text-green-700 mb-3 ml-2">Nível</p>
-              <div className="grid grid-cols-3 gap-2">
-                {Object.entries(LEVELS).map(([id, cfg]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setLevel(id)}
-                    className={`px-2 py-3 rounded-2xl font-bold text-sm transition flex flex-col items-center ${
-                      level === id ? 'bg-green-500 text-white shadow-md scale-105' : 'bg-white text-green-600 hover:bg-green-100 shadow-sm'
-                    }`}
-                  >
-                    <span>{cfg.label}</span>
-                    <span className="text-xs font-normal opacity-90 mt-1">{cfg.points} pts</span>
-                  </button>
-                ))}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-green-50/80 p-4 rounded-3xl border-2 border-green-200 shadow-sm col-span-2">
+                <p className="text-sm font-bold text-green-700 mb-3 ml-2">Nível & Tempo Verbal</p>
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  {Object.entries(LEVELS).map(([id, cfg]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setLevel(id)}
+                      className={`px-2 py-3 rounded-2xl font-bold text-sm transition flex flex-col items-center ${
+                        level === id ? 'bg-green-500 text-white shadow-md scale-105' : 'bg-white text-green-600 hover:bg-green-100 shadow-sm'
+                      }`}
+                    >
+                      <span>{cfg.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <select 
+                  value={selectedTense} 
+                  onChange={e => setSelectedTense(e.target.value)} 
+                  className="w-full p-3 rounded-2xl border-2 border-green-200 bg-white text-green-800 font-bold focus:border-green-400 outline-none cursor-pointer"
+                >
+                  {availableTenses.map(t => (
+                    <option key={t} value={t}>{t === 'Todos' ? 'Misturar todos os tempos verbais' : t}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="bg-orange-50/80 p-4 rounded-3xl border-2 border-orange-200 shadow-sm col-span-2">
+                <p className="text-sm font-bold text-orange-700 mb-3 ml-2 flex items-center gap-2"><Clock className="w-4 h-4"/> Contra o Relógio</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { val: 0, label: 'Livre' },
+                    { val: 15, label: '15s' },
+                    { val: 20, label: '20s' },
+                    { val: 30, label: '30s' }
+                  ].map((opt) => (
+                    <button
+                      key={opt.val}
+                      type="button"
+                      onClick={() => setTimeLimit(opt.val)}
+                      className={`px-2 py-3 rounded-2xl font-bold text-sm transition flex flex-col items-center ${
+                        timeLimit === opt.val ? 'bg-orange-500 text-white shadow-md scale-105' : 'bg-white text-orange-600 hover:bg-orange-100 shadow-sm'
+                      }`}
+                    >
+                      <span>{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -749,8 +894,6 @@ export default function App() {
     );
   }
 
-  const showVerb = LEVELS[level].multipleChoice || level === 'moyen';
-
   // === TELA PLAYING ===
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-100 via-blue-100 to-purple-100 font-sans flex flex-col md:flex-row relative">
@@ -782,14 +925,25 @@ export default function App() {
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center p-4">
-        <div className="glass-card w-full max-w-2xl rounded-[3rem] p-8 md:p-12 shadow-2xl">
+        <div className="glass-card w-full max-w-2xl rounded-[3rem] p-8 md:p-12 shadow-2xl relative">
+          
+          {/* Barra de Tempo (Contra o Relógio) */}
+          {!feedback && timeLimit > 0 && question && (
+             <div className="absolute top-0 left-0 w-full h-3 bg-gray-100 rounded-t-[3rem] overflow-hidden">
+               <div 
+                 className={`h-full transition-all duration-1000 ease-linear ${timeLeft <= 5 ? 'bg-red-500' : 'bg-orange-400'}`} 
+                 style={{ width: `${(timeLeft / timeLimit) * 100}%` }}
+               />
+             </div>
+          )}
+
           {!question ? (
             <div className="flex flex-col items-center justify-center py-16 space-y-4">
               <RefreshCw className="w-12 h-12 text-pink-400 animate-spin" />
               <p className="font-bold text-xl text-gray-500">Preparando o desafio...</p>
             </div>
           ) : (
-            <div className="animate-bounce-in">
+            <div className="animate-bounce-in mt-4">
               {teams.length > 1 && (
                 <p className="text-center text-lg font-extrabold text-indigo-700 mb-4 flex justify-center items-center gap-2">
                   <span className="text-2xl">{currentTeam?.avatar}</span> Pergunta para {currentTeam?.name}
@@ -797,7 +951,7 @@ export default function App() {
               )}
               
               <div className="flex flex-wrap justify-center gap-2 mb-6">
-                {showVerb && <span className="inline-flex items-center gap-2 bg-pink-100 text-pink-600 px-4 py-2 rounded-full font-bold text-sm">Verbo: <span className="uppercase">{question.infinitive}</span></span>}
+                <span className="inline-flex items-center gap-2 bg-pink-100 text-pink-600 px-4 py-2 rounded-full font-bold text-sm">Verbo: <span className="uppercase">{question.infinitive}</span></span>
                 {question.tense && <span className="inline-flex items-center gap-2 bg-indigo-100 text-indigo-600 px-4 py-2 rounded-full font-bold text-sm">{question.tense}</span>}
               </div>
 
@@ -826,18 +980,10 @@ export default function App() {
               )}
 
               {!feedback ? (
-                LEVELS[level].multipleChoice ? (
-                  <div className="grid grid-cols-2 gap-4 mt-6">
-                    {question.options.map((opt, i) => (
-                      <button key={`${opt}-${i}`} onClick={() => submitAnswer(opt)} className="bg-white border-2 border-indigo-100 hover:border-indigo-400 hover:bg-indigo-50 text-indigo-800 font-bold text-xl py-4 rounded-2xl shadow-sm transform transition hover:-translate-y-1 active:scale-95">{opt}</button>
-                    ))}
-                  </div>
-                ) : (
-                  <form onSubmit={(e) => { e.preventDefault(); submitAnswer(answer); }} className="flex flex-col md:flex-row gap-4 justify-center mt-6">
-                    <input type="text" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Digite a forma conjugada..." className="flex-1 px-6 py-4 rounded-2xl border-2 border-indigo-200 focus:border-indigo-500 outline-none text-xl font-bold text-center md:text-left text-indigo-900" autoFocus />
-                    <button type="submit" disabled={!answer.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-8 rounded-2xl shadow-lg transform transition hover:scale-105 disabled:opacity-50 flex items-center justify-center gap-2">Enviar <ArrowRight className="w-5 h-5" /></button>
-                  </form>
-                )
+                <form onSubmit={(e) => { e.preventDefault(); submitAnswer(answer); }} className="flex flex-col md:flex-row gap-4 justify-center mt-6">
+                  <input type="text" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Digite a forma conjugada..." className="flex-1 px-6 py-4 rounded-2xl border-2 border-indigo-200 focus:border-indigo-500 outline-none text-xl font-bold text-center md:text-left text-indigo-900" autoFocus />
+                  <button type="submit" disabled={!answer.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-8 rounded-2xl shadow-lg transform transition hover:scale-105 disabled:opacity-50 flex items-center justify-center gap-2">Enviar <ArrowRight className="w-5 h-5" /></button>
+                </form>
               ) : (
                 <div className={`mt-6 p-6 rounded-3xl flex flex-col items-center justify-center border-2 ${feedback.result === 'correct' ? 'bg-green-50 border-green-200 animate-bounce-in' : feedback.result === 'close' ? 'bg-yellow-50 border-yellow-200 animate-bounce-in' : 'bg-red-50 border-red-200 animate-shake'}`}>
                   {feedback.result === 'correct' && (
@@ -846,10 +992,12 @@ export default function App() {
                   {feedback.result === 'close' && (
                     <><CheckCircle2 className="w-14 h-14 text-yellow-500 mb-2" /><h3 className="text-2xl font-extrabold text-yellow-700">Quase!</h3><p className="text-yellow-700 text-sm">Faltou o acento. Pontos reduzidos pela metade.</p></>
                   )}
-                  {feedback.result === 'incorrect' && (
+                  {(feedback.result === 'incorrect' || feedback.result === 'timeout') && (
                     <>
                       <XCircle className="w-14 h-14 text-red-500 mb-2" />
-                      <h3 className="text-2xl font-extrabold text-red-700">Dommage...</h3>
+                      <h3 className="text-2xl font-extrabold text-red-700">
+                        {feedback.result === 'timeout' ? 'Tempo esgotado!' : 'Dommage...'}
+                      </h3>
                       <p className="text-red-600 mb-1">A resposta correta era: <span className="font-black bg-red-200 px-2 py-1 rounded">{question.correctAnswer}</span></p>
                       <div className="my-2 bg-white border border-red-200 rounded-2xl p-3 text-gray-800 text-center shadow-sm w-full max-w-md">
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Frase correta completa:</p>
