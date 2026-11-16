@@ -124,6 +124,29 @@ const globalStyles = `
 function topScoreInGame(teams) {
   return teams.reduce((max, t) => Math.max(max, t.score), 0);
 }
+const CreditsFooter = () => (
+  <div className="mt-8 text-center text-sm font-medium text-gray-700/80 z-10 relative animate-bounce-in pb-4">
+    <p>
+      Desenvolvido com 🥐 por <span className="font-bold text-gray-900">Myqueias</span>, 
+      apoiado por <span className="font-bold text-indigo-700">Gemini</span> & <span className="font-bold text-orange-700">Claude</span>.
+    </p>
+    <p className="mt-1">
+      Supervisão e aulas incríveis de francês: {' '}
+      <a 
+        href="https://www.instagram.com/francescombiancacortez/" 
+        target="_blank" 
+        rel="noopener noreferrer" 
+        className="font-black text-pink-600 hover:text-pink-700 underline decoration-pink-300 transition-all hover:scale-105 inline-block"
+        title="Quer aprender francês? Fale com a Bianca!"
+      >
+        Profª Bianca ✨
+      </a>
+    </p>
+    <p className="mt-2 text-xs opacity-60 font-bold">
+      Infraestrutura por Cloudflare Workers ⚡
+    </p>
+  </div>
+);
 
 export default function App() {
   const [phase, setPhase] = useState('setup');
@@ -820,6 +843,7 @@ export default function App() {
                 Começar a partida <Sparkles className="w-6 h-6" />
               </button>
             </div>
+            <CreditsFooter />
           </div>
         </div>
       );
