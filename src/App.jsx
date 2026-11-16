@@ -62,25 +62,63 @@ const checkAnswer = (given, correct) => {
   return 'incorrect';
 };
 
+// ==========================================
+// EFEITOS DAS CARTAS (GAMEFICAÇÃO)
+// ==========================================
+// ==========================================
+// EFEITOS DAS CARTAS (GAMEFICAÇÃO)
+// ==========================================
+const CARD_EFFECTS = {
+  base: [ // A carta que fica visível
+    { id: 'b1', name: 'Sorte Menor', desc: '+10 pts', icon: '🪙', color: 'bg-blue-500', sound: 'base.mp3', exec: (pts) => ({ selfPts: pts + 10, msg: 'Ganhou 10 pontos extras!' }) },
+    { id: 'b2', name: 'Bônus Leve', desc: '+50%', icon: '📈', color: 'bg-indigo-500', sound: 'base.mp3', exec: (pts) => ({ selfPts: Math.round(pts * 1.5), msg: 'Pontos da rodada aumentaram 50%!' }) },
+    { id: 'b3', name: 'Balão', desc: '+15 pts', icon: '🎈', color: 'bg-sky-500', sound: 'base.mp3', exec: (pts) => ({ selfPts: pts + 15, msg: 'Ganhou 15 pontos extras!' }) }
+  ],
+  positive: [ // Cartas escondidas que são MUITO boas
+    { id: 'p1', name: 'O Dobro!', desc: 'Pontos x2', icon: '🚀', color: 'bg-emerald-500', sound: 'positivo.mp3', exec: (pts) => ({ selfPts: pts * 2, msg: 'Que sorte! Seus pontos foram dobrados!' }) },
+    { id: 'p2', name: 'O Triplo!', desc: 'Pontos x3', icon: '🔥', color: 'bg-orange-500', sound: 'positivo.mp3', exec: (pts) => ({ selfPts: pts * 3, msg: 'INCRÍVEL! Seus pontos foram triplicados!' }) },
+    { id: 'p3', name: 'Tesouro', desc: '+40 pts', icon: '💎', color: 'bg-yellow-500', sound: 'positivo.mp3', exec: (pts) => ({ selfPts: pts + 40, msg: 'Você encontrou o tesouro de 40 pontos!' }) },
+    { id: 'p4', name: 'Bênção Eterna', desc: '+20% fixo', icon: '✨', color: 'bg-cyan-500', sound: 'positivo.mp3', exec: (pts) => ({ selfPts: pts, selfBuff: 1.2, msg: 'Bênção Eterna! +20% em todos os seus próximos acertos.' }) }
+  ],
+  negative: [ // Cartas escondidas que são ruins
+    { id: 'n1', name: 'Ai...', desc: 'Ganha só metade', icon: '✂️', color: 'bg-red-500', sound: 'negativo.mp3', exec: (pts) => ({ selfPts: Math.round(pts * 0.5), msg: 'Corte: Ganhou apenas metade dos pontos da rodada...' }) },
+    { id: 'n2', name: 'Azar', desc: '-10 pts', icon: '🌧️', color: 'bg-slate-600', sound: 'negativo.mp3', exec: (pts) => ({ selfPts: pts - 10, msg: 'Chuva de azar: Perdeu 10 pontos.' }) },
+    { id: 'n3', name: 'Zicado', desc: '0 pts', icon: '💩', color: 'bg-amber-700', sound: 'negativo.mp3', exec: (pts) => ({ selfPts: 0, msg: 'Zicado! Você não ganhou NENHUM ponto nesta rodada.' }) },
+    { id: 'n4', name: 'Maldição', desc: '-10% fixo', icon: '🧟', color: 'bg-rose-800', sound: 'negativo.mp3', exec: (pts) => ({ selfPts: pts, selfBuff: 0.9, msg: 'Amaldiçoado! -10% de pontos fixo nas próximas rodadas.' }) }
+  ],
+  chaos: [ // Cartas escondidas imprevisíveis ou de ataque
+    { id: 'c1', name: 'Vampiro', desc: 'Rouba pts', icon: '🦇', color: 'bg-purple-700', sound: 'caos.mp3', exec: (pts, teams) => {
+        const hasRivais = teams.length > 1;
+        return { 
+            selfPts: pts + (hasRivais ? (teams.length - 1) * 10 : 10), 
+            allOthersPts: -10, 
+            msg: hasRivais ? 'Vampirismo: Roubou 10 pontos de cada rival!' : 'Morcego solitário: Ganhou +10 pts extras.' 
+        };
+    }},
+    { id: 'c2', name: 'Meteoro', desc: 'Rival perde pts', icon: '☄️', color: 'bg-stone-700', sound: 'caos.mp3', exec: (pts) => {
+        return { selfPts: pts, randomEnemyPts: -25, msg: 'Meteoro: Um desastre!' };
+    }},
+    { id: 'c3', name: 'Comunismo', desc: 'Pts p/ Todos', icon: '🤝', color: 'bg-red-600', sound: 'caos.mp3', exec: (pts) => {
+        return { selfPts: pts, setAllPts: pts, msg: 'Distribuição justa! Todos ganharam os mesmos pontos que você nesta rodada.' };
+    }},
+    { id: 'c4', name: 'Revolução', desc: 'Troca c/ o Líder', icon: '🔄', color: 'bg-fuchsia-600', sound: 'caos.mp3', exec: (pts) => {
+        return { selfPts: pts, swapLeader: true, msg: 'Revolução!' };
+    }},
+    { id: 'c5', name: 'Roleta Russa', desc: '+100 ou Zera', icon: '🎲', color: 'bg-teal-600', sound: 'caos.mp3', exec: (pts) => {
+        const isLucky = Math.random() > 0.5;
+        return { selfPts: isLucky ? pts + 100 : 0, msg: isLucky ? 'TIROU A SORTE GRANDE! Ganhou +100 Pontos!' : 'A roleta falhou... Rodada totalmente zerada.' };
+    }}
+  ]
+};
+
+
 const globalStyles = `
-  @keyframes bounce-in {
-    0% { transform: scale(0.8); opacity: 0; }
-    60% { transform: scale(1.05); opacity: 1; }
-    100% { transform: scale(1); opacity: 1; }
-  }
+  @keyframes bounce-in { 0% { transform: scale(0.8); opacity: 0; } 60% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
   .animate-bounce-in { animation: bounce-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-  @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    75% { transform: translateX(5px); }
-  }
+  @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
   .animate-shake { animation: shake 0.3s ease-in-out; }
-  .glass-card {
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(12px);
-    border: 2px solid rgba(255, 255, 255, 0.5);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  }
+  .glass-card { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border: 2px solid rgba(255, 255, 255, 0.5); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); }
+  .card-flip-hover:hover { transform: scale(1.05) translateY(-5px); box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
 `;
 
 function topScoreInGame(teams) {
@@ -99,10 +137,8 @@ export default function App() {
   const [timeLimit, setTimeLimit] = useState(0); 
   
   const [setupError, setSetupError] = useState('');
-
   const [questionBank, setQuestionBank] = useState(FALLBACK_BANK);
   const [isLoadingDB, setIsLoadingDB] = useState(true);
-  
   const [usedQuestions, setUsedQuestions] = useState([]);
 
   const [teams, setTeams] = useState([]);
@@ -110,26 +146,28 @@ export default function App() {
 
   const [question, setQuestion] = useState(null);
   const [answer, setAnswer] = useState('');
-  const [feedback, setFeedback] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(0);
   
+  // Modificações no feedback para comportar o estado base e o minigame
+  const [feedback, setFeedback] = useState(null); 
+  const [cardGameState, setCardGameState] = useState(null); // null, 'picking', 'revealed'
+  const [generatedCards, setGeneratedCards] = useState([]);
+  const [pickedCardIndex, setPickedCardIndex] = useState(null);
+  const [cardMsg, setCardMsg] = useState('');
+
+  const [timeLeft, setTimeLeft] = useState(0);
   const [hintShown, setHintShown] = useState(false);
   const [hintIndex, setHintIndex] = useState(null); 
-
   const [isMuted, setIsMuted] = useState(false);
+  const [currentCardAudio, setCurrentCardAudio] = useState(null);
+
 
   const [bgm] = useState(() => {
     const audio = new Audio('/sounds/background_sound.mp3');
-    audio.loop = true;
-    audio.volume = 0.15; 
-    return audio;
+    audio.loop = true; audio.volume = 0.15; return audio;
   });
-
   const [tipAudio] = useState(() => {
     const audio = new Audio('/sounds/tip.mp3');
-    audio.loop = true; 
-    audio.volume = 0.3;
-    return audio;
+    audio.loop = true; audio.volume = 0.3; return audio;
   });
 
   useEffect(() => {
@@ -149,21 +187,14 @@ export default function App() {
     try {
       const res = await fetch(API_URL);
       const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        // AQUI ESTAVA O BUG. Removido o filtro que apagava as opções!
-        setQuestionBank(data);
-      }
-    } catch (e) {
-      console.warn("Usando fallback de questões locais.");
-    }
+      if (Array.isArray(data) && data.length > 0) setQuestionBank(data);
+    } catch (e) { console.warn("Usando fallback."); }
     setIsLoadingDB(false);
   };
 
-  useEffect(() => {
-    fetchQuestions();
-  }, []);
+  useEffect(() => { fetchQuestions(); }, []);
 
-  // Lógica do Temporizador
+  // Temporizador
   useEffect(() => {
     if (phase === 'playing' && !feedback && timeLimit > 0 && question) {
       const timer = setInterval(() => {
@@ -181,71 +212,42 @@ export default function App() {
   }, [phase, feedback, question, timeLimit]);
 
   const handleTimeOut = () => {
-    tipAudio.pause();
-    tipAudio.currentTime = 0;
+    tipAudio.pause(); tipAudio.currentTime = 0;
     playSound('wrong_answer.mp3');
-    setFeedback({ result: 'timeout', earned: 0, givenAnswer: '' });
+    setFeedback({ result: 'timeout', baseEarned: 0, givenAnswer: '' });
   };
 
+  // ADMIN STATE
   const [isAdminAuth, setIsAdminAuth] = useState(false);
   const [adminPassInput, setAdminPassInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  
   const [newQ, setNewQ] = useState(INITIAL_QUESTION_STATE);
   const [editingIndex, setEditingIndex] = useState(null);
 
   const availableTenses = ['Todos', ...new Set(questionBank.map(q => q.tense).filter(Boolean))];
 
-  const updateTeamInput = (index, value) => {
-    setTeamInputs((prev) => prev.map((t, i) => (i === index ? { ...t, name: value } : t)));
-  };
-
-  const updateTeamAvatar = (index, emoji) => {
-    setTeamInputs((prev) => prev.map((t, i) => (i === index ? { ...t, avatar: emoji } : t)));
-    setOpenAvatarPicker(null);
-  };
-
-  const addTeamInput = () => {
-    if (teamInputs.length < MAX_TEAMS) {
-      setTeamInputs((prev) => [
-        ...prev, 
-        { name: `Jogador ${prev.length + 1}`, avatar: AVATARS[prev.length % AVATARS.length] }
-      ]);
-    }
-  };
-
-  const removeTeamInput = (index) => {
-    if (teamInputs.length > MIN_TEAMS) {
-      setTeamInputs((prev) => prev.filter((_, i) => i !== index));
-      if (openAvatarPicker === index) setOpenAvatarPicker(null);
-    }
-  };
+  // LOGICA DE JOGO
+  const updateTeamInput = (index, value) => setTeamInputs((prev) => prev.map((t, i) => (i === index ? { ...t, name: value } : t)));
+  const updateTeamAvatar = (index, emoji) => { setTeamInputs((prev) => prev.map((t, i) => (i === index ? { ...t, avatar: emoji } : t))); setOpenAvatarPicker(null); };
+  const addTeamInput = () => { if (teamInputs.length < MAX_TEAMS) setTeamInputs((prev) => [...prev, { name: `Jogador ${prev.length + 1}`, avatar: AVATARS[prev.length % AVATARS.length] }]); };
+  const removeTeamInput = (index) => { if (teamInputs.length > MIN_TEAMS) { setTeamInputs((prev) => prev.filter((_, i) => i !== index)); if (openAvatarPicker === index) setOpenAvatarPicker(null); } };
 
   const pickRandomQuestion = (lvl) => {
     let pool = questionBank.filter((q) => q.level === lvl);
-    
-    if (selectedTense !== 'Todos') {
-      pool = pool.filter(q => q.tense === selectedTense);
-    }
-    
+    if (selectedTense !== 'Todos') pool = pool.filter(q => q.tense === selectedTense);
     let available = pool.filter((q) => !usedQuestions.includes(q.sentence));
-    if (available.length === 0 && pool.length > 0) {
-      available = pool;
-    }
-
+    if (available.length === 0 && pool.length > 0) available = pool;
     const sourcePool = available.length > 0 ? available : FALLBACK_BANK;
     const chosen = sourcePool[Math.floor(Math.random() * sourcePool.length)];
-
     setUsedQuestions((prev) => [...prev, chosen.sentence]);
-    
-    return {
-      ...chosen,
-      options: LEVELS[lvl].multipleChoice && chosen.options ? shuffle([...chosen.options]) : []
-    };
+    return { ...chosen, options: LEVELS[lvl].multipleChoice && chosen.options ? shuffle([...chosen.options]) : [] };
   };
 
   const loadQuestion = (lvl) => {
     setFeedback(null);
+    setCardGameState(null);
+    setPickedCardIndex(null);
+    setCardMsg('');
     setAnswer('');
     setHintShown(false);
     setHintIndex(null);
@@ -255,31 +257,17 @@ export default function App() {
 
   const startGame = () => {
     const validTeams = teamInputs.filter((t) => t.name.trim() !== '');
-    if (validTeams.length < MIN_TEAMS) {
-      playSound('wrong_answer.mp3');
-      setSetupError(`Informe pelo menos ${MIN_TEAMS} jogador.`);
-      return;
-    }
-    
+    if (validTeams.length < MIN_TEAMS) { playSound('wrong_answer.mp3'); setSetupError(`Informe pelo menos ${MIN_TEAMS} jogador.`); return; }
     const lowerNames = validTeams.map((t) => t.name.toLowerCase().trim());
-    if (new Set(lowerNames).size !== lowerNames.length) {
-      playSound('wrong_answer.mp3');
-      setSetupError('Os nomes dos jogadores precisam ser diferentes.');
-      return;
-    }
-
+    if (new Set(lowerNames).size !== lowerNames.length) { playSound('wrong_answer.mp3'); setSetupError('Nomes não podem ser iguais.'); return; }
+    
     let poolCheck = questionBank.filter((q) => q.level === level);
-    if (selectedTense !== 'Todos') {
-      poolCheck = poolCheck.filter(q => q.tense === selectedTense);
-    }
-    if (poolCheck.length === 0 && questionBank.length > 0) {
-      playSound('wrong_answer.mp3');
-      setSetupError(`Não há questões de nível ${LEVELS[level].label} no tempo ${selectedTense}.`);
-      return;
-    }
+    if (selectedTense !== 'Todos') poolCheck = poolCheck.filter(q => q.tense === selectedTense);
+    if (poolCheck.length === 0 && questionBank.length > 0) { playSound('wrong_answer.mp3'); setSetupError(`Sem questões de nível ${LEVELS[level].label} no tempo ${selectedTense}.`); return; }
     
     setSetupError('');
-    setTeams(validTeams.map((t) => ({ name: t.name.trim(), avatar: t.avatar, score: 0 })));
+    // Inicializamos o buff do jogador como 1.0 (neutro)
+    setTeams(validTeams.map((t) => ({ name: t.name.trim(), avatar: t.avatar, score: 0, buff: 1.0 })));
     setTurnsDone(0);
     setUsedQuestions([]); 
     setPhase('playing');
@@ -289,193 +277,199 @@ export default function App() {
   };
 
   const resetGame = () => {
-    bgm.pause();
-    bgm.currentTime = 0;
-    tipAudio.pause();
-    tipAudio.currentTime = 0;
-    setPhase('setup');
-    setTeams([]);
-    setTurnsDone(0);
-    setUsedQuestions([]); 
-    setQuestion(null);
-    setFeedback(null);
-    setAnswer('');
+    bgm.pause(); bgm.currentTime = 0; tipAudio.pause(); tipAudio.currentTime = 0;
+    setPhase('setup'); setTeams([]); setTurnsDone(0); setUsedQuestions([]); setQuestion(null); setFeedback(null); setAnswer('');
+  };
+
+  // =======================================
+  // LOGICA DO JOGO E DAS CARTAS
+  // =======================================
+  
+  const generateCards = () => {
+    const c1 = { ...CARD_EFFECTS.base[Math.floor(Math.random() * CARD_EFFECTS.base.length)], faceUp: true };
+    const c2 = { ...CARD_EFFECTS.positive[Math.floor(Math.random() * CARD_EFFECTS.positive.length)], faceUp: false };
+    const c3 = { ...CARD_EFFECTS.negative[Math.floor(Math.random() * CARD_EFFECTS.negative.length)], faceUp: false };
+    const c4 = { ...CARD_EFFECTS.chaos[Math.floor(Math.random() * CARD_EFFECTS.chaos.length)], faceUp: false };
+    
+    let deck = shuffle([c1, c2, c3, c4]);
+    setGeneratedCards(deck);
+    setCardGameState('picking');
   };
 
   const submitAnswer = (given) => {
     if (!question || feedback) return;
-
-    tipAudio.pause();
-    tipAudio.currentTime = 0;
-    if (bgm.paused) {
-      bgm.play().catch(() => {});
-    }
+    tipAudio.pause(); tipAudio.currentTime = 0;
+    if (bgm.paused) bgm.play().catch(() => {});
 
     const result = checkAnswer(given, question.correctAnswer);
-    let earned = 0;
+    let baseEarned = 0;
 
     if (result !== 'incorrect') {
       playSound('right_answer.mp3');
-      earned = LEVELS[level].points;
-      if (result === 'close') earned = earned / 2;
-      if (hintShown) earned = earned / 2;
-      earned = Math.round(earned);
+      baseEarned = LEVELS[level].points;
+      if (result === 'close') baseEarned = baseEarned / 2;
+      if (hintShown) baseEarned = baseEarned / 2;
+      baseEarned = Math.round(baseEarned);
     } else {
       playSound('wrong_answer.mp3');
     }
 
-    if (earned > 0) {
-      setTeams((prev) =>
-        prev.map((t, i) => (i === turnIndex ? { ...t, score: t.score + earned } : t))
-      );
+    setFeedback({ result, baseEarned, givenAnswer: given });
+
+    if (baseEarned > 0) {
+      generateCards(); // Inicia o minigame de cartas em vez de somar pontos na hora
     }
-    setFeedback({ result, earned, givenAnswer: given });
   };
 
   const contestAnswer = () => {
     if (!feedback) return;
-    const earned = LEVELS[level].points;
-    setTeams((prev) =>
-      prev.map((t, i) => (i === turnIndex ? { ...t, score: t.score + earned } : t))
-    );
     playSound('right_answer.mp3'); 
-    setFeedback({ ...feedback, result: 'correct', earned, contested: true });
+    const baseEarned = LEVELS[level].points;
+    setFeedback({ ...feedback, result: 'correct', baseEarned, contested: true });
+    generateCards(); // Mostra as cartas agora que acertou
   };
 
-  const nextTurn = () => {
+    const handlePickCard = (cardIndex) => {
+    const card = generatedCards[cardIndex];
+    
+    // Toca o som da carta, pausa a música de fundo e retoma quando acabar
+    if (card.sound && !isMuted) {
+      bgm.pause(); // Pausa a música principal
+      
+      const cardAudio = new Audio(`/sounds/${card.sound}`);
+      cardAudio.volume = 0.7; 
+      
+      cardAudio.onended = () => {
+        // Só volta a tocar se o jogo ainda não estiver mutado e a fase for 'playing'
+        if (!isMuted && phase === 'playing') {
+          bgm.play().catch(() => {});
+        }
+        
+        setCurrentCardAudio(null); // <-- LINHA NOVA AQUI (Limpa o estado quando a música acaba sozinha)
+      };
+      
+      setCurrentCardAudio(cardAudio); // <-- LINHA NOVA AQUI (Guarda a música no estado para o botão "Próxima rodada" poder cortá-la)
+      cardAudio.play().catch(() => {});
+    }
+
+
+    setCardGameState('revealed');
+    setPickedCardIndex(cardIndex);
+
+    let newTeams = [...teams];
+    let current = { ...newTeams[turnIndex] };
+    
+    // Calcula pontos base + buff permanente do jogador (se tiver)
+    let earnedThisTurn = feedback.baseEarned;
+    earnedThisTurn = Math.round(earnedThisTurn * current.buff);
+
+    // Executa a mágica da carta
+    let effect = card.exec(earnedThisTurn, newTeams);
+    
+    // Aplica no jogador atual
+    current.score = Math.max(0, current.score + effect.selfPts);
+    if (effect.selfBuff) current.buff = current.buff * effect.selfBuff;
+    newTeams[turnIndex] = current;
+
+    let finalMsg = effect.msg;
+
+
+
+    // Aplica efeitos nos adversários
+    if (effect.allOthersPts) {
+      newTeams = newTeams.map((t, i) => i !== turnIndex ? { ...t, score: Math.max(0, t.score + effect.allOthersPts) } : t);
+    }
+    if (effect.setAllPts !== undefined) {
+      newTeams = newTeams.map((t, i) => i !== turnIndex ? { ...t, score: t.score + effect.setAllPts } : t);
+    }
+    if (effect.randomEnemyPts && newTeams.length > 1) {
+       let enemies = newTeams.map((t,i) => i).filter(i => i !== turnIndex);
+       let target = enemies[Math.floor(Math.random() * enemies.length)];
+       newTeams[target].score = Math.max(0, newTeams[target].score + effect.randomEnemyPts);
+       finalMsg += ` Atingiu ${newTeams[target].name}!`;
+    }
+    if (effect.swapLeader && newTeams.length > 1) {
+       let leaderIdx = 0;
+       for(let i=1; i<newTeams.length; i++) {
+         if(newTeams[i].score > newTeams[leaderIdx].score) leaderIdx = i;
+       }
+       if (leaderIdx !== turnIndex) {
+          let temp = newTeams[leaderIdx].score;
+          newTeams[leaderIdx].score = newTeams[turnIndex].score;
+          newTeams[turnIndex].score = temp;
+          finalMsg += ` Você roubou o lugar de ${newTeams[leaderIdx].name}!`;
+       } else {
+          finalMsg += ` Mas você já está em primeiro lugar!`;
+       }
+    }
+
+    setTeams(newTeams);
+    setCardMsg(finalMsg);
+  };
+
+    const nextTurn = () => {
+    // Corta a música da carta se ela ainda estiver tocando
+    if (currentCardAudio) {
+      currentCardAudio.pause();
+      currentCardAudio.currentTime = 0;
+      setCurrentCardAudio(null);
+    }
+
     const next = turnsDone + 1;
     setTurnsDone(next);
     if (next >= totalTurns) {
-      bgm.pause();
-      playSound('victory.mp3');
-      setPhase('finished');
+      bgm.pause(); 
+      playSound('victory.mp3'); 
+      setPhase('finished'); 
       setQuestion(null);
     } else {
+      // Garante que a música de fundo volte para a próxima pergunta
+      if (bgm.paused && !isMuted) {
+        bgm.play().catch(() => {});
+      }
       loadQuestion(level);
     }
   };
 
+
+  // ADMIN FUNCTIONS...
   const handleAdminLogin = async (e) => {
-    e.preventDefault();
-    setIsLoadingDB(true);
+    e.preventDefault(); setIsLoadingDB(true);
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${adminPassInput}` },
-        body: JSON.stringify(questionBank)
-      });
-      if (res.ok) {
-        setIsAdminAuth(true);
-        setSetupError('');
-      } else {
-        setSetupError('Senha administrativa incorreta.');
-      }
-    } catch (e) {
-      setSetupError('Erro de conexão com o servidor.');
-    }
+      const res = await fetch(API_URL, { method: 'POST', headers: { 'Authorization': `Bearer ${adminPassInput}` }, body: JSON.stringify(questionBank) });
+      if (res.ok) { setIsAdminAuth(true); setSetupError(''); } else { setSetupError('Senha administrativa incorreta.'); }
+    } catch (e) { setSetupError('Erro de conexão com o servidor.'); }
     setIsLoadingDB(false);
   };
-
   const handleSaveQuestion = async (e) => {
-    e.preventDefault();
-    setIsSaving(true);
-
+    e.preventDefault(); setIsSaving(true);
     let safeSentence = newQ.sentence.replace(/_{1,}/g, '___');
-    if (!safeSentence.includes('___')) {
-      safeSentence += ' ___'; 
-    }
-
-    const formattedQuestion = {
-      ...newQ,
-      sentence: safeSentence,
-      correctAnswer: newQ.correctAnswer.trim(),
-      options: newQ.level === 'facile' ? 
-        (Array.isArray(newQ.options) ? newQ.options : newQ.options.split(',').map(s => s.trim())) 
-        : []
-    };
-    
+    if (!safeSentence.includes('___')) safeSentence += ' ___'; 
+    const formattedQuestion = { ...newQ, sentence: safeSentence, correctAnswer: newQ.correctAnswer.trim(), options: newQ.level === 'facile' ? (Array.isArray(newQ.options) ? newQ.options : newQ.options.split(',').map(s => s.trim())) : [] };
     let updatedBank;
-    if (editingIndex !== null) {
-      updatedBank = [...questionBank];
-      updatedBank[editingIndex] = formattedQuestion;
-    } else {
-      updatedBank = [...questionBank, formattedQuestion];
-    }
-
+    if (editingIndex !== null) { updatedBank = [...questionBank]; updatedBank[editingIndex] = formattedQuestion; } 
+    else { updatedBank = [...questionBank, formattedQuestion]; }
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${adminPassInput}` },
-        body: JSON.stringify(updatedBank)
-      });
-      
-      if (res.ok) {
-        setQuestionBank(updatedBank);
-        setNewQ(INITIAL_QUESTION_STATE);
-        
-        if (editingIndex !== null) {
-          alert("Questão atualizada com sucesso!");
-          setEditingIndex(null);
-        } else {
-          alert("Nova questão adicionada com sucesso ao banco de dados!");
-        }
-      } else {
-        alert("Erro ao salvar. Verifique a autenticação.");
-      }
-    } catch (err) {
-      alert("Erro de conexão com a Cloudflare.");
-    }
+      const res = await fetch(API_URL, { method: 'POST', headers: { 'Authorization': `Bearer ${adminPassInput}` }, body: JSON.stringify(updatedBank) });
+      if (res.ok) { setQuestionBank(updatedBank); setNewQ(INITIAL_QUESTION_STATE); if (editingIndex !== null) { alert("Questão atualizada!"); setEditingIndex(null); } else { alert("Nova questão adicionada!"); } } 
+      else { alert("Erro ao salvar."); }
+    } catch (err) { alert("Erro de conexão."); }
     setIsSaving(false);
   };
-
-  const editQuestion = (index) => {
-    const q = questionBank[index];
-    setNewQ({
-      ...q,
-      options: Array.isArray(q.options) ? q.options.join(', ') : (q.options || '')
-    });
-    setEditingIndex(index);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
+  const editQuestion = (index) => { const q = questionBank[index]; setNewQ({ ...q, options: Array.isArray(q.options) ? q.options.join(', ') : (q.options || '') }); setEditingIndex(index); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const deleteQuestion = async (index) => {
-    if (!window.confirm("Tem certeza que deseja apagar esta questão?")) return;
-    
-    setIsSaving(true);
-    const updatedBank = questionBank.filter((_, i) => i !== index);
-    
+    if (!window.confirm("Certeza?")) return;
+    setIsSaving(true); const updatedBank = questionBank.filter((_, i) => i !== index);
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${adminPassInput}` },
-        body: JSON.stringify(updatedBank)
-      });
-      if (res.ok) {
-        setQuestionBank(updatedBank);
-        if (editingIndex === index) {
-          setEditingIndex(null);
-          setNewQ(INITIAL_QUESTION_STATE);
-        }
-      } else {
-        alert("Erro de autenticação ao deletar.");
-      }
-    } catch(e) {
-       alert("Erro ao conectar com a Cloudflare.");
-    }
+      const res = await fetch(API_URL, { method: 'POST', headers: { 'Authorization': `Bearer ${adminPassInput}` }, body: JSON.stringify(updatedBank) });
+      if (res.ok) { setQuestionBank(updatedBank); if (editingIndex === index) { setEditingIndex(null); setNewQ(INITIAL_QUESTION_STATE); } } else { alert("Erro."); }
+    } catch(e) { alert("Erro de conexão."); }
     setIsSaving(false);
   };
-
   const exportBackup = () => {
     const dataStr = JSON.stringify(questionBank, null, 2);
     const blob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `bataille_backup_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `backup_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
   };
 
   const totalTurns = rounds * teams.length;
@@ -485,27 +479,39 @@ export default function App() {
   const topScore = ranking[0]?.score ?? 0;
   const winners = ranking.filter((t) => t.score === topScore);
 
-  const GlobalControls = () => (
+    const GlobalControls = () => (
     <div className="fixed top-4 right-4 flex gap-3 z-50">
       {phase === 'setup' && (
-        <button
-          onClick={() => setPhase('admin')}
-          className="p-3 bg-white/80 backdrop-blur-sm rounded-full shadow-lg border border-gray-200 hover:bg-white transition"
-          title="Área do Moderador"
-        >
+        <button onClick={() => setPhase('admin')} className="p-3 bg-white/80 backdrop-blur-sm rounded-full shadow-lg border border-gray-200 hover:bg-white transition" title="Área do Moderador">
           <Lock className="w-5 h-5 text-indigo-600" />
         </button>
       )}
-      <button
-        onClick={() => setIsMuted(!isMuted)}
-        className="p-3 bg-white/80 backdrop-blur-sm rounded-full shadow-lg border border-gray-200 hover:bg-white transition"
-      >
+      
+      {/* BOTÃO DE SAIR DO JOGO */}
+      {phase === 'playing' && (
+        <button 
+          onClick={() => {
+            if (window.confirm('Tem certeza que deseja sair desta partida? Todo o progresso atual será perdido.')) {
+              resetGame();
+            }
+          }} 
+          className="p-3 bg-white/80 backdrop-blur-sm rounded-full shadow-lg border border-red-200 hover:bg-red-50 transition" 
+          title="Sair da Partida"
+        >
+          <X className="w-5 h-5 text-red-600" />
+        </button>
+      )}
+
+      <button onClick={() => setIsMuted(!isMuted)} className="p-3 bg-white/80 backdrop-blur-sm rounded-full shadow-lg border border-gray-200 hover:bg-white transition">
         {isMuted ? <VolumeX className="w-5 h-5 text-red-500" /> : <Volume2 className="w-5 h-5 text-indigo-600" />}
       </button>
     </div>
   );
 
-  // === TELA DO MODERADOR ===
+
+  // ... (Telas de Admin, Setup e Finished continuam idênticas ao original. Exibindo apenas UI baseada em state)
+  
+    // === TELA DO MODERADOR ===
   if (phase === 'admin') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 font-sans p-4 relative">
@@ -686,235 +692,183 @@ export default function App() {
     );
   }
 
-  // === TELA DE SETUP ===
-  if (phase === 'setup') {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-300 via-purple-300 to-pink-300 font-sans p-4" onClick={() => setOpenAvatarPicker(null)}>
-        <GlobalControls />
-        <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
 
-        {openAvatarPicker !== null && (
-          <div 
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-bounce-in"
-            onClick={() => setOpenAvatarPicker(null)}
-          >
+  if (phase === 'setup') {
+    // ... Tela de Setup mantida exatamente igual
+    return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-300 via-purple-300 to-pink-300 font-sans p-4" onClick={() => setOpenAvatarPicker(null)}>
+          <GlobalControls />
+          <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
+  
+          {openAvatarPicker !== null && (
             <div 
-              className="bg-white border-4 border-yellow-300 rounded-3xl p-6 max-w-sm w-full shadow-2xl" 
-              onClick={e => e.stopPropagation()}
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-bounce-in"
+              onClick={() => setOpenAvatarPicker(null)}
             >
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-extrabold text-gray-800">Escolha um Avatar</h3>
-                <button onClick={() => setOpenAvatarPicker(null)} className="text-gray-400 hover:text-red-500 bg-gray-100 rounded-full p-1 transition">
-                  <X className="w-5 h-5"/>
-                </button>
-              </div>
-              <div className="flex flex-wrap justify-center gap-4">
-                {AVATARS.map(emoji => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => updateTeamAvatar(openAvatarPicker, emoji)}
-                    className="text-4xl p-3 bg-gray-50 hover:bg-yellow-100 rounded-2xl transition hover:scale-110 shadow-sm border border-gray-100 hover:border-yellow-300"
-                  >
-                    {emoji}
+              <div 
+                className="bg-white border-4 border-yellow-300 rounded-3xl p-6 max-w-sm w-full shadow-2xl" 
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-extrabold text-gray-800">Escolha um Avatar</h3>
+                  <button onClick={() => setOpenAvatarPicker(null)} className="text-gray-400 hover:text-red-500 bg-gray-100 rounded-full p-1 transition">
+                    <X className="w-5 h-5"/>
                   </button>
-                ))}
+                </div>
+                <div className="flex flex-wrap justify-center gap-4">
+                  {AVATARS.map(emoji => (
+                    <button
+                      key={emoji} type="button" onClick={() => updateTeamAvatar(openAvatarPicker, emoji)}
+                      className="text-4xl p-3 bg-gray-50 hover:bg-yellow-100 rounded-2xl transition hover:scale-110 shadow-sm border border-gray-100 hover:border-yellow-300"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
               </div>
+            </div>
+          )}
+  
+          <div className="glass-card p-8 md:p-10 rounded-[3rem] shadow-2xl max-w-md w-full animate-bounce-in relative overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="absolute top-0 left-0 w-full h-4 bg-gradient-to-r from-pink-400 to-yellow-400" />
+            <h1 className="text-4xl md:text-5xl font-extrabold text-center text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500 mb-1">
+              Bataille de Verbes
+            </h1>
+            <p className="text-center text-gray-600 font-medium mb-6">
+              {isLoadingDB ? 'Sincronizando questões do servidor...' : 'Aprenda francês brincando! 🥐✨'}
+            </p>
+  
+            <div className="space-y-6">
+              <div className="bg-yellow-50/80 p-4 rounded-3xl border-2 border-yellow-200 shadow-sm">
+                <p className="text-sm font-bold text-yellow-700 mb-3 ml-2">Jogadores ({teamInputs.length}/{MAX_TEAMS})</p>
+                <div className="space-y-3 max-h-56 overflow-y-auto pr-2">
+                  {teamInputs.map((team, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <button
+                        type="button" onClick={() => setOpenAvatarPicker(i)}
+                        className="w-12 h-12 flex-shrink-0 flex items-center justify-center text-2xl bg-white border-2 border-yellow-200 rounded-2xl hover:bg-yellow-100 hover:scale-105 transition shadow-sm"
+                        title="Escolher Avatar"
+                      >
+                        {team.avatar}
+                      </button>
+                      
+                      <input
+                        type="text" value={team.name} onChange={(e) => updateTeamInput(i, e.target.value)}
+                        placeholder={`Jogador ${i + 1}`} maxLength={20}
+                        className="flex-1 px-4 py-3 rounded-2xl border-2 border-yellow-200 focus:border-yellow-400 outline-none font-bold text-yellow-800 placeholder-yellow-300 bg-white"
+                      />
+                      {teamInputs.length > MIN_TEAMS && (
+                        <button type="button" onClick={() => removeTeamInput(i)} className="p-2 rounded-full bg-white text-red-400 hover:text-red-600 shadow-sm transition">
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {teamInputs.length < MAX_TEAMS && (
+                  <button type="button" onClick={addTeamInput} className="mt-4 inline-flex items-center justify-center w-full gap-2 text-sm font-bold text-yellow-700 bg-white hover:bg-yellow-100 rounded-2xl py-3 shadow-sm transition">
+                    <Plus className="w-4 h-4" /> Adicionar jogador
+                  </button>
+                )}
+              </div>
+  
+              <div className="bg-blue-50/80 p-4 rounded-3xl border-2 border-blue-200 shadow-sm">
+                <p className="text-sm font-bold text-blue-700 mb-3 ml-2">
+                  Rodadas: <span className="bg-blue-600 text-white px-2 py-1 rounded-full">{rounds}</span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {[1, 2, 3, 5, 8, 10].map((n) => (
+                    <button key={n} type="button" onClick={() => setRounds(n)} className={`px-4 py-2 rounded-2xl font-bold text-sm transition ${rounds === n ? 'bg-blue-500 text-white shadow-md scale-105' : 'bg-white text-blue-600 hover:bg-blue-100 shadow-sm'}`}>
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+  
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-green-50/80 p-4 rounded-3xl border-2 border-green-200 shadow-sm col-span-2">
+                  <p className="text-sm font-bold text-green-700 mb-3 ml-2">Nível & Tempo Verbal</p>
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {Object.entries(LEVELS).map(([id, cfg]) => (
+                      <button key={id} type="button" onClick={() => setLevel(id)} className={`px-2 py-3 rounded-2xl font-bold text-sm transition flex flex-col items-center ${level === id ? 'bg-green-500 text-white shadow-md scale-105' : 'bg-white text-green-600 hover:bg-green-100 shadow-sm'}`}>
+                        <span>{cfg.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <select value={selectedTense} onChange={e => setSelectedTense(e.target.value)} className="w-full p-3 rounded-2xl border-2 border-green-200 bg-white text-green-800 font-bold focus:border-green-400 outline-none cursor-pointer">
+                    {availableTenses.map(t => (
+                      <option key={t} value={t}>{t === 'Todos' ? 'Misturar todos os tempos verbais' : t}</option>
+                    ))}
+                  </select>
+                </div>
+  
+                <div className="bg-orange-50/80 p-4 rounded-3xl border-2 border-orange-200 shadow-sm col-span-2">
+                  <p className="text-sm font-bold text-orange-700 mb-3 ml-2 flex items-center gap-2"><Clock className="w-4 h-4"/> Contra o Relógio</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[{ val: 0, label: 'Livre' }, { val: 15, label: '15s' }, { val: 20, label: '20s' }, { val: 30, label: '30s' }].map((opt) => (
+                      <button key={opt.val} type="button" onClick={() => setTimeLimit(opt.val)} className={`px-2 py-3 rounded-2xl font-bold text-sm transition flex flex-col items-center ${timeLimit === opt.val ? 'bg-orange-500 text-white shadow-md scale-105' : 'bg-white text-orange-600 hover:bg-orange-100 shadow-sm'}`}>
+                        <span>{opt.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+  
+              {setupError && <p className="text-red-600 font-bold text-sm text-center animate-shake">{setupError}</p>}
+  
+              <button disabled={isLoadingDB} onClick={startGame} className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 text-white font-bold py-4 rounded-3xl shadow-lg transform transition hover:scale-105 active:scale-95 flex items-center justify-center gap-2 text-xl disabled:opacity-50">
+                Começar a partida <Sparkles className="w-6 h-6" />
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      );
+  }
 
-        <div className="glass-card p-8 md:p-10 rounded-[3rem] shadow-2xl max-w-md w-full animate-bounce-in relative overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="absolute top-0 left-0 w-full h-4 bg-gradient-to-r from-pink-400 to-yellow-400" />
-          <h1 className="text-4xl md:text-5xl font-extrabold text-center text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500 mb-1">
-            Bataille de Verbes
-          </h1>
-          <p className="text-center text-gray-600 font-medium mb-6">
-            {isLoadingDB ? 'Sincronizando questões do servidor...' : 'Aprenda francês brincando! 🥐✨'}
-          </p>
-
-          <div className="space-y-6">
-            <div className="bg-yellow-50/80 p-4 rounded-3xl border-2 border-yellow-200 shadow-sm">
-              <p className="text-sm font-bold text-yellow-700 mb-3 ml-2">Jogadores ({teamInputs.length}/{MAX_TEAMS})</p>
-              <div className="space-y-3 max-h-56 overflow-y-auto pr-2">
-                {teamInputs.map((team, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setOpenAvatarPicker(i)}
-                      className="w-12 h-12 flex-shrink-0 flex items-center justify-center text-2xl bg-white border-2 border-yellow-200 rounded-2xl hover:bg-yellow-100 hover:scale-105 transition shadow-sm"
-                      title="Escolher Avatar"
-                    >
+  if (phase === 'finished') {
+    // ... Tela de finalização mantida igual
+    return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-yellow-100 via-pink-100 to-purple-200 font-sans p-4 relative">
+          <GlobalControls />
+          <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
+          <div className="glass-card p-8 md:p-10 rounded-[3rem] shadow-2xl max-w-md w-full text-center animate-bounce-in">
+            
+            <div className="relative inline-block mb-4">
+              <Trophy className="w-24 h-24 text-yellow-500" />
+              <div className="absolute -bottom-2 -right-2 text-5xl drop-shadow-md">
+                {winners.length === 1 ? winners[0].avatar : '👑'}
+              </div>
+            </div>
+  
+            <h2 className="text-3xl font-extrabold text-purple-800 mb-1">
+              {teams.length === 1 ? 'Fim de Jogo!' : (winners.length > 1 ? 'Empate!' : `Vitória: ${winners[0].name}!`)}
+            </h2>
+            <p className="text-gray-600 mb-6">
+              {teams.length === 1
+                ? `Você fez ${topScore} pontos em ${rounds} rodada(s)!`
+                : (winners.length > 1
+                  ? `${winners.map((w) => w.name).join(' e ')} empataram com ${topScore} pts.`
+                  : `Com ${topScore} pontos em ${rounds} rodada(s).`)}
+            </p>
+            <div className="space-y-3 mb-8">
+              {ranking.map((team, index) => (
+                <div key={team.name} className={`flex items-center justify-between p-4 rounded-2xl border-2 ${team.score === topScore ? 'bg-yellow-50 border-yellow-300' : 'bg-white/80 border-transparent'}`}>
+                  <div className="flex items-center gap-3">
+                    <span className="w-10 h-10 rounded-full flex items-center justify-center text-xl bg-indigo-50 shadow-sm border border-indigo-100">
                       {team.avatar}
-                    </button>
-                    
-                    <input
-                      type="text"
-                      value={team.name}
-                      onChange={(e) => updateTeamInput(i, e.target.value)}
-                      placeholder={`Jogador ${i + 1}`}
-                      maxLength={20}
-                      className="flex-1 px-4 py-3 rounded-2xl border-2 border-yellow-200 focus:border-yellow-400 outline-none font-bold text-yellow-800 placeholder-yellow-300 bg-white"
-                    />
-                    {teamInputs.length > MIN_TEAMS && (
-                      <button
-                        type="button"
-                        onClick={() => removeTeamInput(i)}
-                        className="p-2 rounded-full bg-white text-red-400 hover:text-red-600 shadow-sm transition"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
+                    </span>
+                    <span className="font-bold text-gray-700 truncate max-w-[150px]">{team.name}</span>
                   </div>
-                ))}
-              </div>
-              {teamInputs.length < MAX_TEAMS && (
-                <button
-                  type="button"
-                  onClick={addTeamInput}
-                  className="mt-4 inline-flex items-center justify-center w-full gap-2 text-sm font-bold text-yellow-700 bg-white hover:bg-yellow-100 rounded-2xl py-3 shadow-sm transition"
-                >
-                  <Plus className="w-4 h-4" /> Adicionar jogador
-                </button>
-              )}
-            </div>
-
-            <div className="bg-blue-50/80 p-4 rounded-3xl border-2 border-blue-200 shadow-sm">
-              <p className="text-sm font-bold text-blue-700 mb-3 ml-2">
-                Rodadas: <span className="bg-blue-600 text-white px-2 py-1 rounded-full">{rounds}</span>
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {[1, 2, 3, 5, 8, 10].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setRounds(n)}
-                    className={`px-4 py-2 rounded-2xl font-bold text-sm transition ${
-                      rounds === n ? 'bg-blue-500 text-white shadow-md scale-105' : 'bg-white text-blue-600 hover:bg-blue-100 shadow-sm'
-                    }`}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-green-50/80 p-4 rounded-3xl border-2 border-green-200 shadow-sm col-span-2">
-                <p className="text-sm font-bold text-green-700 mb-3 ml-2">Nível & Tempo Verbal</p>
-                <div className="grid grid-cols-3 gap-2 mb-3">
-                  {Object.entries(LEVELS).map(([id, cfg]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setLevel(id)}
-                      className={`px-2 py-3 rounded-2xl font-bold text-sm transition flex flex-col items-center ${
-                        level === id ? 'bg-green-500 text-white shadow-md scale-105' : 'bg-white text-green-600 hover:bg-green-100 shadow-sm'
-                      }`}
-                    >
-                      <span>{cfg.label}</span>
-                    </button>
-                  ))}
+                  <span className="font-extrabold text-indigo-600 text-xl">{team.score}</span>
                 </div>
-                <select 
-                  value={selectedTense} 
-                  onChange={e => setSelectedTense(e.target.value)} 
-                  className="w-full p-3 rounded-2xl border-2 border-green-200 bg-white text-green-800 font-bold focus:border-green-400 outline-none cursor-pointer"
-                >
-                  {availableTenses.map(t => (
-                    <option key={t} value={t}>{t === 'Todos' ? 'Misturar todos os tempos verbais' : t}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="bg-orange-50/80 p-4 rounded-3xl border-2 border-orange-200 shadow-sm col-span-2">
-                <p className="text-sm font-bold text-orange-700 mb-3 ml-2 flex items-center gap-2"><Clock className="w-4 h-4"/> Contra o Relógio</p>
-                <div className="grid grid-cols-4 gap-2">
-                  {[
-                    { val: 0, label: 'Livre' },
-                    { val: 15, label: '15s' },
-                    { val: 20, label: '20s' },
-                    { val: 30, label: '30s' }
-                  ].map((opt) => (
-                    <button
-                      key={opt.val}
-                      type="button"
-                      onClick={() => setTimeLimit(opt.val)}
-                      className={`px-2 py-3 rounded-2xl font-bold text-sm transition flex flex-col items-center ${
-                        timeLimit === opt.val ? 'bg-orange-500 text-white shadow-md scale-105' : 'bg-white text-orange-600 hover:bg-orange-100 shadow-sm'
-                      }`}
-                    >
-                      <span>{opt.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              ))}
             </div>
-
-            {setupError && <p className="text-red-600 font-bold text-sm text-center animate-shake">{setupError}</p>}
-
-            <button
-              disabled={isLoadingDB}
-              onClick={startGame}
-              className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 text-white font-bold py-4 rounded-3xl shadow-lg transform transition hover:scale-105 active:scale-95 flex items-center justify-center gap-2 text-xl disabled:opacity-50"
-            >
-              Começar a partida <Sparkles className="w-6 h-6" />
+            <button onClick={resetGame} className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-4 rounded-3xl shadow-lg transform transition hover:scale-105 text-lg">
+              Nova partida
             </button>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  // === TELA FINISHED ===
-  if (phase === 'finished') {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-yellow-100 via-pink-100 to-purple-200 font-sans p-4 relative">
-        <GlobalControls />
-        <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
-        <div className="glass-card p-8 md:p-10 rounded-[3rem] shadow-2xl max-w-md w-full text-center animate-bounce-in">
-          
-          <div className="relative inline-block mb-4">
-            <Trophy className="w-24 h-24 text-yellow-500" />
-            <div className="absolute -bottom-2 -right-2 text-5xl drop-shadow-md">
-              {winners.length === 1 ? winners[0].avatar : '👑'}
-            </div>
-          </div>
-
-          <h2 className="text-3xl font-extrabold text-purple-800 mb-1">
-            {teams.length === 1 ? 'Fim de Jogo!' : (winners.length > 1 ? 'Empate!' : `Vitória: ${winners[0].name}!`)}
-          </h2>
-          <p className="text-gray-600 mb-6">
-            {teams.length === 1
-              ? `Você fez ${topScore} pontos em ${rounds} rodada(s)!`
-              : (winners.length > 1
-                ? `${winners.map((w) => w.name).join(' e ')} empataram com ${topScore} pts.`
-                : `Com ${topScore} pontos em ${rounds} rodada(s).`)}
-          </p>
-          <div className="space-y-3 mb-8">
-            {ranking.map((team, index) => (
-              <div
-                key={team.name}
-                className={`flex items-center justify-between p-4 rounded-2xl border-2 ${
-                  team.score === topScore ? 'bg-yellow-50 border-yellow-300' : 'bg-white/80 border-transparent'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="w-10 h-10 rounded-full flex items-center justify-center text-xl bg-indigo-50 shadow-sm border border-indigo-100">
-                    {team.avatar}
-                  </span>
-                  <span className="font-bold text-gray-700 truncate max-w-[150px]">{team.name}</span>
-                </div>
-                <span className="font-extrabold text-indigo-600 text-xl">{team.score}</span>
-              </div>
-            ))}
-          </div>
-          <button onClick={resetGame} className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-4 rounded-3xl shadow-lg transform transition hover:scale-105 text-lg">
-            Nova partida
-          </button>
-        </div>
-      </div>
-    );
+      );
   }
 
   // === TELA PLAYING ===
@@ -935,10 +889,17 @@ export default function App() {
         <div className="space-y-3 flex-1 overflow-y-auto max-h-[50vh] pr-1">
           {teams.map((team, i) => (
             <div key={team.name} className={`flex items-center justify-between p-3 rounded-2xl border-2 transition-all ${i === turnIndex ? 'bg-indigo-50 border-indigo-300 shadow-sm scale-[1.02]' : 'bg-white/80 border-transparent'}`}>
-              <div className="flex items-center gap-2">
-                <span className="text-xl drop-shadow-sm">{team.avatar}</span>
-                <span className="font-bold text-gray-700 truncate max-w-[110px]">{team.name}</span>
-                {team.score === topScoreInGame(teams) && team.score > 0 && <Star className="w-4 h-4 text-yellow-500 fill-current ml-1" />}
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl drop-shadow-sm">{team.avatar}</span>
+                  <span className="font-bold text-gray-700 truncate max-w-[110px]">{team.name}</span>
+                  {team.score === topScoreInGame(teams) && team.score > 0 && <Star className="w-4 h-4 text-yellow-500 fill-current ml-1" />}
+                </div>
+                {team.buff !== 1.0 && (
+                   <span className={`text-[10px] font-bold mt-1 inline-block px-2 py-0.5 rounded-full w-max ${team.buff > 1 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                     Modificador: {(team.buff * 100).toFixed(0)}%
+                   </span>
+                )}
               </div>
               <span className="font-extrabold text-indigo-600 text-lg">{team.score}</span>
             </div>
@@ -948,15 +909,12 @@ export default function App() {
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center p-4">
-        <div className="glass-card w-full max-w-2xl rounded-[3rem] p-8 md:p-12 shadow-2xl relative">
+        <div className="glass-card w-full max-w-2xl rounded-[3rem] p-8 md:p-12 shadow-2xl relative overflow-hidden">
           
-          {/* Barra de Tempo (Contra o Relógio) */}
+          {/* Barra de Tempo */}
           {!feedback && timeLimit > 0 && question && (
              <div className="absolute top-0 left-0 w-full h-3 bg-gray-100 rounded-t-[3rem] overflow-hidden">
-               <div 
-                 className={`h-full transition-all duration-1000 ease-linear ${timeLeft <= 5 ? 'bg-red-500' : 'bg-orange-400'}`} 
-                 style={{ width: `${(timeLeft / timeLimit) * 100}%` }}
-               />
+               <div className={`h-full transition-all duration-1000 ease-linear ${timeLeft <= 5 ? 'bg-red-500' : 'bg-orange-400'}`} style={{ width: `${(timeLeft / timeLimit) * 100}%` }} />
              </div>
           )}
 
@@ -1002,7 +960,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* AQUI A MÚLTIPLA ESCOLHA VOLTA A APARECER SE O NÍVEL PERMITIR */}
+              {/* INPUT OU OPÇÕES */}
               {!feedback ? (
                 LEVELS[level].multipleChoice && question.options && question.options.length > 0 ? (
                   <div className="grid grid-cols-2 gap-4 mt-6">
@@ -1019,14 +977,78 @@ export default function App() {
                   </form>
                 )
               ) : (
-                <div className={`mt-6 p-6 rounded-3xl flex flex-col items-center justify-center border-2 ${feedback.result === 'correct' ? 'bg-green-50 border-green-200 animate-bounce-in' : feedback.result === 'close' ? 'bg-yellow-50 border-yellow-200 animate-bounce-in' : 'bg-red-50 border-red-200 animate-shake'}`}>
-                  {feedback.result === 'correct' && (
-                    <><CheckCircle2 className="w-14 h-14 text-green-500 mb-2" /><h3 className="text-2xl font-extrabold text-green-700">Magnifique!</h3></>
-                  )}
-                  {feedback.result === 'close' && (
-                    <><CheckCircle2 className="w-14 h-14 text-yellow-500 mb-2" /><h3 className="text-2xl font-extrabold text-yellow-700">Quase!</h3><p className="text-yellow-700 text-sm">Faltou o acento. Pontos reduzidos pela metade.</p></>
-                  )}
-                  {(feedback.result === 'incorrect' || feedback.result === 'timeout') && (
+                <div className={`mt-6 p-6 rounded-3xl flex flex-col items-center justify-center border-2 ${(feedback.result === 'correct' || feedback.result === 'close') ? 'bg-slate-50 border-slate-200 animate-bounce-in' : 'bg-red-50 border-red-200 animate-shake'}`}>
+                  
+                  {(feedback.result === 'correct' || feedback.result === 'close') ? (
+                    <>
+                      <CheckCircle2 className={`w-14 h-14 mb-2 ${feedback.result === 'correct' ? 'text-green-500' : 'text-yellow-500'}`} />
+                      <h3 className={`text-2xl font-extrabold ${feedback.result === 'correct' ? 'text-green-700' : 'text-yellow-700'}`}>
+                        {feedback.result === 'correct' ? 'Magnifique!' : 'Quase! Faltou o acento (-50%).'}
+                      </h3>
+                      
+                      <p className="font-bold text-gray-500 mt-1 mb-4">
+                        Você garantiu <span className="bg-gray-200 text-gray-800 px-2 py-1 rounded">+{feedback.baseEarned} pontos base</span>
+                      </p>
+
+                      {/* GAMEFICAÇÃO DAS CARTAS AQUI DENTRO */}
+                      <div className="w-full bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col items-center transition-all">
+                        {cardGameState === 'picking' && (
+                          <>
+                            <p className="text-lg font-extrabold text-indigo-700 mb-2">🃏 Momento de Sorte!</p>
+                            <p className="text-sm font-medium text-gray-500 mb-6 text-center">Fique com a carta revelada ou arrisque virar uma das cartas escondidas!</p>
+                            
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full px-2">
+                              {generatedCards.map((card, i) => (
+                                <button 
+                                  key={i} 
+                                  onClick={() => handlePickCard(i)}
+                                  className={`relative w-full aspect-[3/4] rounded-2xl shadow-md transition-all overflow-hidden flex items-center justify-center card-flip-hover ${card.faceUp ? card.color : 'bg-gradient-to-br from-indigo-500 to-purple-600 border-2 border-indigo-300'}`}
+                                >
+                                  {card.faceUp ? (
+                                    <div className="flex flex-col items-center text-white p-2">
+                                      <span className="text-4xl drop-shadow-md mb-2">{card.icon}</span>
+                                      <span className="text-[11px] font-extrabold text-center uppercase tracking-wider leading-tight">{card.name}</span>
+                                      <span className="text-[10px] text-white/80 text-center mt-1 leading-tight hidden md:block">{card.desc}</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-5xl font-black text-white/40 drop-shadow-sm">?</span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+
+                        {cardGameState === 'revealed' && (
+                          <div className="animate-bounce-in flex flex-col items-center w-full">
+                            <p className="text-2xl font-black text-center text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 mb-6">
+                              {cardMsg}
+                            </p>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full px-2 mb-6">
+                              {generatedCards.map((card, i) => (
+                                <div 
+                                  key={i} 
+                                  className={`relative w-full aspect-[3/4] rounded-2xl shadow-sm overflow-hidden flex items-center justify-center transition-all ${card.color} ${i === pickedCardIndex ? 'ring-4 ring-yellow-400 scale-105 z-10' : 'opacity-40 grayscale-[30%]'}`}
+                                >
+                                  <div className="flex flex-col items-center text-white p-2">
+                                    <span className="text-4xl drop-shadow-md mb-2">{card.icon}</span>
+                                    <span className="text-[11px] font-extrabold text-center uppercase tracking-wider leading-tight">{card.name}</span>
+                                    <span className="text-[10px] text-white/80 text-center mt-1 leading-tight">{card.desc}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            <button onClick={nextTurn} className="w-full md:w-auto font-bold py-4 px-10 rounded-2xl shadow-lg transform transition hover:scale-105 flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-900 text-white text-lg">
+                              {turnsDone + 1 >= totalTurns ? 'Ver resultado final' : 'Próxima rodada'} <ArrowRight className="w-5 h-5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    // QUANDO A RESPOSTA FOR INCORRETA (Sem cartas, a menos que ele conteste)
                     <>
                       <XCircle className="w-14 h-14 text-red-500 mb-2" />
                       <h3 className="text-2xl font-extrabold text-red-700">
@@ -1038,20 +1060,20 @@ export default function App() {
                         <p className="font-extrabold text-lg text-indigo-900">{question.sentence.replace(/_{1,}/, question.correctAnswer)}</p>
                       </div>
                       <button onClick={contestAnswer} className="mt-2 mb-2 bg-amber-400 hover:bg-amber-500 text-amber-950 font-bold py-2 px-5 rounded-xl shadow-sm transition flex items-center gap-2 text-sm">
-                        🛡️ Contestar resposta (Aceitar e ganhar pontos)
+                        🛡️ Contestar resposta (Aceitar e ir para o sorteio das cartas)
+                      </button>
+
+                      {question.explanation && (
+                        <div className="mt-3 bg-white/70 border border-white rounded-2xl p-4 text-gray-700 text-sm max-w-md w-full">
+                          <p className="font-bold text-indigo-700 mb-1">💡 Por que é esta forma?</p>
+                          <p>{question.explanation}</p>
+                        </div>
+                      )}
+                      <button onClick={nextTurn} className="mt-5 font-bold py-4 px-10 w-full md:w-auto rounded-2xl shadow-md transform transition hover:scale-105 flex justify-center items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white">
+                        {turnsDone + 1 >= totalTurns ? 'Ver resultado' : 'Próxima rodada'} <ArrowRight className="w-5 h-5" />
                       </button>
                     </>
                   )}
-                  <p className="font-bold text-indigo-700 mt-2">{feedback.earned > 0 ? `+${feedback.earned} pontos para ${currentTeam?.name}!` : 'Nenhum ponto nesta vez.'}</p>
-                  {question.explanation && (
-                    <div className="mt-3 bg-white/70 border border-white rounded-2xl p-4 text-gray-700 text-sm max-w-md">
-                      <p className="font-bold text-indigo-700 mb-1">💡 Por que é esta forma?</p>
-                      <p>{question.explanation}</p>
-                    </div>
-                  )}
-                  <button onClick={nextTurn} className="mt-5 font-bold py-3 px-8 rounded-2xl shadow-md transform transition hover:scale-105 flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white">
-                    {turnsDone + 1 >= totalTurns ? 'Ver resultado' : 'Próxima rodada'} <ArrowRight className="w-5 h-5" />
-                  </button>
                 </div>
               )}
             </div>
